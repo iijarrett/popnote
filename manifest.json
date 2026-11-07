@@ -1,0 +1,9 @@
+{
+  "id": "popnote",
+  "name": "PopNote",
+  "version": "0.0.1",
+  "minAppVersion": "1.8.7",
+  "description": "Temporary spike: floating note, pin, opacity and global shortcut.",
+  "author": "",
+  "isDesktopOnly": true
+}

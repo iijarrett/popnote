@@ -1,0 +1,21 @@
+node_modules/
+main.js
+data.json
+*.log
+
+# Local planning and agent instructions
+AGENTS.md
+CLAUDE.md
+BLUEPRINT.md
+.agents/
+.codex/
+.claude/
+
+# Vaults, credentials, application archives and diagnostic exports
+.obsidian/
+test_vault/
+.env
+.env.*
+*.asar
+*.trace
+*restart-trace*.json
