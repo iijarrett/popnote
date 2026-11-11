@@ -12,6 +12,26 @@
   -webkit-app-region: no-drag;
 }
 
+.popnote-overlay-in-tab-header {
+  flex: 0 1 auto;
+  block-size: 100%;
+  min-inline-size: 0;
+  padding-inline: var(--size-4-1);
+}
+
+.popnote-overlay-in-tab-header .popnote-overlay-note {
+  display: none;
+}
+
+.popnote-overlay-in-tab-header .popnote-overlay-panel {
+  flex: 0 1 auto;
+  inline-size: clamp(var(--size-4-8), 16vw, 7rem);
+}
+
+.popnote-overlay-in-tab-header .popnote-overlay-range {
+  inline-size: 100%;
+}
+
 .popnote-overlay,
 .popnote-overlay * {
   box-sizing: border-box;

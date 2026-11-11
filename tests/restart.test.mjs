@@ -199,7 +199,7 @@ function host(initial = {}, options = {}) {
     },
     controls(index = 0) {
       return windows[index].dom.all(windows[index].doc.body).find(element =>
-        element.className === "popnote-overlay" || element.className === "popnote-spike");
+        element.classList.contains("popnote-overlay") || element.className === "popnote-spike");
     },
     move(leaf, destination) {
       leaf.container = destination ? destination.getContainer() : { doc: mainDocument, win: mainWindow };
@@ -506,8 +506,9 @@ test("native new-tab inputs keep window opacity, layout ownership, and the share
   const [win] = h.windows;
   const root = h.controls();
   const group = h.leaves[0].parent;
-  assert.equal(group.containerEl.children[1], root);
-  assert.equal(group.containerEl.children[2], group.tabsContainerEl);
+  assert.equal(root.parentElement, group.tabHeaderContainerEl);
+  assert.equal(root.classList.contains("popnote-overlay-in-tab-header"), true);
+  assert.deepEqual(group.containerEl.children, [group.tabHeaderContainerEl, group.tabsContainerEl]);
   assert.equal(win.dom.fire(win.newTab, "click").defaultPrevented, false);
   assert.equal(win.dom.fire(win.newTab, "click", { isTrusted: true }).defaultPrevented, true);
   const wrappedCommand = h.plugin.app.commands.findCommand().checkCallback;

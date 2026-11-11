@@ -516,10 +516,10 @@ the proposed 80–100% opacity range and 90% default remain deferred. v0.1 stays
 
 ## Milestone 2 Stage 1 - compact controls and tab behavior
 
-- The controls occupy a slim row above the note, with a stable height when
-  hidden, revealed, or showing the inline opacity slider. Click **⋯** to
-  toggle the drag handle, active tab label, Pin, and opacity. Clicking the
-  note dismisses the controls. Obsidian provides the window close button.
+- On the tested tab layout, **⋯** sits in Obsidian's existing tab strip,
+  so the controls take no separate row. Click it to toggle the drag handle,
+  Pin, and opacity. Clicking the note dismisses the controls. Obsidian's
+  navigation and window buttons remain available.
 - The opacity slider uses 30–100% in 1% steps. The test vault's saved value
   was 70% during the latest checks. **PopNote: Show controls** can be assigned
   an Obsidian hotkey. Escape closes the slider, then returns to the note.

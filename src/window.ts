@@ -56,7 +56,7 @@ export class SpikeWindow {
     try {
       const container = this.container;
       const group = this.tabGroup;
-      const host = group?.containerEl ?? (this.leaf.view as { contentEl?: HTMLElement }).contentEl;
+      const host = group?.tabHeaderContainerEl ?? (this.leaf.view as { contentEl?: HTMLElement }).contentEl;
       const controlsAttached = !this.controls || (host === this.controlsHost && host?.isConnected &&
         this.controls.isConnected && this.controls.parentElement === host &&
         this.controls.ownerDocument === this.document);
@@ -273,7 +273,7 @@ export class SpikeWindow {
     const group = leaf.parent as TabGroup | undefined;
     const stableGroup = group?.tabsContainerEl?.parentElement === group?.containerEl &&
       group?.tabHeaderContainerEl?.parentElement === group?.containerEl && group?.containerEl?.ownerDocument === document;
-    const host = stableGroup ? group!.containerEl : (leaf.view as { contentEl?: HTMLElement }).contentEl;
+    const host = stableGroup ? group!.tabHeaderContainerEl : (leaf.view as { contentEl?: HTMLElement }).contentEl;
     if (!host || host.ownerDocument !== document || (!stableGroup && !leaf.view.containerEl.contains(host))) {
       throw new Error("Note content container is unavailable; standard window controls remain available.");
     }
@@ -284,7 +284,8 @@ export class SpikeWindow {
     host.classList.add("popnote-overlay-host");
     if (stableGroup) {
       this.tabGroup = group;
-      host.insertBefore(controls, group!.tabsContainerEl);
+      controls.classList.add("popnote-overlay-in-tab-header");
+      host.append(controls);
       const click = (event: MouseEvent) => {
         const button = (event.target as Element | null)?.closest?.(".workspace-tab-header-new-tab");
         if (event.button === 0 && button && group!.tabHeaderContainerEl.contains(button)) openTab(event);
