@@ -90,7 +90,8 @@ test("pin, existing-range opacity delegate only while exclusively owned", () => 
 
 test("failed native controls revert and disable only the unavailable control", () => {
   const h = host({ opacity: false }); h.overlay.recover(); h.range.value = "0.57"; h.fire(h.range, "input");
-  assert.equal(h.range.value, "0.4"); assert.equal(h.range.disabled, true); assert.equal(h.pin.disabled, false);
+  assert.equal(h.range.value, "0.4"); assert.equal(h.range.disabled, true); assert.equal(h.opacity.disabled, true);
+  assert.equal(h.opacity.textContent, "Opacity"); assert.equal(h.pin.disabled, false);
   h.fire(h.pin, "click"); assert.equal(h.pin.getAttribute("aria-pressed"), "true");
 });
 

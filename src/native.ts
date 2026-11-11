@@ -317,7 +317,14 @@ export class SpikeNative {
       if (!window) return false;
       this.method(window, "setOpacity");
       this.method(window, "getOpacity");
-      return this.change("Opacity", window, () => window.getOpacity!(), (before) => window.setOpacity(before), Math.min(1, Math.max(0.3, value)));
+      const read = () => window.getOpacity!();
+      return this.change("Opacity", window, read, (opacity) => {
+        window.setOpacity(opacity);
+        const applied = read();
+        if (!Number.isFinite(applied) || Math.abs(applied - opacity) >= 0.005) {
+          throw new Error("the window manager did not apply the requested opacity");
+        }
+      }, Math.min(1, Math.max(0.3, value)));
     }) ?? false;
   }
 

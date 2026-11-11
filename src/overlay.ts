@@ -101,7 +101,12 @@ export class OverlayControls {
       const value = Number(this.range.value);
       if (Number.isFinite(value) && value >= 0.3 && value <= 1) {
         if (this.actions.opacity(value)) this.opacity = value;
-        else this.range.disabled = true;
+        else {
+          this.range.disabled = true;
+          this.panelOpen = false;
+          this.render();
+          this.recovery.focus();
+        }
       }
       this.updateValues();
     });
@@ -148,7 +153,9 @@ export class OverlayControls {
     const percent = `${Math.round(this.opacity * 100)}%`;
     if (Number(this.range.value) !== this.opacity) this.range.value = String(this.opacity);
     this.range.setAttribute("aria-valuetext", `${Math.round(this.opacity * 100)} percent`);
-    this.opacityButton.textContent = percent;
+    this.opacityButton.disabled = this.range.disabled;
+    this.opacityButton.textContent = this.range.disabled ? "Opacity" : percent;
+    this.opacityButton.title = this.range.disabled ? "Opacity unavailable" : "Window opacity";
     this.output.textContent = percent;
     this.pinButton.setAttribute("aria-pressed", String(this.pinned));
     this.pinButton.title = this.pinButton.disabled ? "Pin unavailable" : "Keep PopNote on top";

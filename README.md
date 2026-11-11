@@ -4,8 +4,8 @@ PopNote gives an Obsidian note its own floating desktop window. Use a global
 shortcut to show or hide it, pin it above other apps, and adjust its opacity.
 
 This is a development preview. It requires Obsidian 1.15.0 or newer.
-Windows has partial live validation on 1.15.0. macOS and Linux validation
-are pending.
+Windows and Kali WSLg have partial live validation on 1.15.0. macOS and
+other Linux desktops still need live checks.
 
 ## Try the development build
 
@@ -19,7 +19,7 @@ are pending.
 ## Current state
 
 Milestone 2 Stage 1 is implemented with the narrow-window, close-button and
-new-tab fixes. The build and all 80 automated checks passed. On Windows with
+new-tab fixes. The build and all 81 automated checks passed. On Windows with
 Obsidian 1.15.0, the controls and slider left the note title visible at 639 px,
 the standard window X closed PopNote cleanly, and + and Ctrl+T kept the
 dedicated window at its saved 70% opacity. On a full restart with two PopNote
@@ -78,10 +78,20 @@ PopNote saves its settings in the vault's plugin data. Recent startup and window
 diagnostics, which may include vault-relative note paths, are stored in Obsidian's
 local storage for troubleshooting. The plugin makes no network requests.
 
+## Linux smoke test
+
+In an isolated Kali amd64 WSLg environment on Obsidian 1.15.0, the command
+opened the note and the compact controls in both Wayland and XWayland. The
+toggle hid and restored the same native window. Both sessions kept the
+window at full opacity, so PopNote disabled the opacity control. Native
+readback alone does not establish visible stacking. Global shortcut delivery,
+pointer movement and resizing, and independent desktop sessions still need
+testing. Arch, Omarchy, Ubuntu and Debian remain unverified.
+
 ## GUI coverage and result record
 
 Run Windows first, macOS second, then available Linux setups. Windows has the
-limited owner-reported passes below; all other targets remain **unverified**.
+limited passes below. See the separate Kali WSLg results above.
 Add a separate result row for each actual machine, desktop session and Obsidian
 package. A build pass is not a GUI pass.
 
@@ -553,7 +563,7 @@ the proposed 80–100% opacity range and 90% default remain deferred. v0.1 stays
 - [ ] Alternate themes and fonts, narrower sizes, zoom, interrupted shutdown,
   frame-by-frame flash detection, macOS, and Linux.
 
-The build and all 80 automated checks passed, including tab ownership,
+The build and all 81 automated checks passed, including tab ownership,
 release cleanup, restart filtering, and pin readback. Stage 2 and v0.1 remain deferred.
 
 The latest Windows check on Obsidian 1.15.0 confirmed that the same window

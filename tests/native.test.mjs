@@ -136,3 +136,13 @@ test("pin reports failure when a window manager ignores the request", () => {
   assert.ok(h.notices.some(message => message.includes("Pin disabled")));
   assert.equal(h.native.opacity(0.7), true);
 });
+
+test("opacity reports failure when the compositor ignores the value", () => {
+  const h = host();
+  h.original.setOpacity = () => {};
+  h.bind();
+  assert.equal(h.native.opacity(0.71), false);
+  assert.equal(h.original.alpha, 1);
+  assert.ok(h.notices.some(message => message.includes("Opacity disabled")));
+  assert.equal(h.native.pin(true), true);
+});
