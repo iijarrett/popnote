@@ -9,7 +9,7 @@ const code = ts.transpileModule(readFileSync(new URL("../src/native.ts", import.
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 
-function host() {
+function host(pinFallbackLevel) {
   const notices = [], listeners = new Map();
   const document = { title: "note" };
   let allowed = true;
@@ -38,7 +38,7 @@ function host() {
       Notice: class { constructor(message) { notices.push(message); } }, Platform: { isLinux: false },
     } : { remote },
   });
-  const native = new module.exports.SpikeNative(() => {});
+  const native = new module.exports.SpikeNative(() => {}, undefined, pinFallbackLevel);
   return { native, original, unrelated, document, notices, listeners,
     allow(value) { allowed = value; }, bind() { return native.bind(document, () => allowed); } };
 }
@@ -111,4 +111,28 @@ test("releasing a hidden window shows only that original window without taking f
   h.allow(false); h.native.release();
   assert.equal(h.original.visible, true); assert.equal(focusCalls, 0);
   assert.equal(h.unrelated.alpha, 0.9);
+});
+
+test("pin retries with the configured level when Electron ignores its default", () => {
+  const h = host("pop-up-menu");
+  const calls = [];
+  h.original.setAlwaysOnTop = function(value, level) {
+    calls.push([value, level]);
+    if (!value || level === "pop-up-menu") this.pinned = value;
+  };
+  h.bind();
+  assert.equal(h.native.pin(true), true);
+  assert.equal(h.original.pinned, true);
+  assert.deepEqual(calls, [[true, undefined], [true, "pop-up-menu"]]);
+  h.native.release();
+  assert.equal(h.original.pinned, false);
+});
+
+test("pin reports failure when a window manager ignores the request", () => {
+  const h = host();
+  h.original.setAlwaysOnTop = () => {};
+  h.bind();
+  assert.equal(h.native.pin(true), false);
+  assert.ok(h.notices.some(message => message.includes("Pin disabled")));
+  assert.equal(h.native.opacity(0.7), true);
 });

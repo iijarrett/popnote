@@ -3,8 +3,9 @@
 PopNote gives an Obsidian note its own floating desktop window. Use a global
 shortcut to show or hide it, pin it above other apps, and adjust its opacity.
 
-This is a development preview. The current build has partial Windows
-validation on Obsidian 1.15.0. macOS and Linux validation are pending.
+This is a development preview. It requires Obsidian 1.15.0 or newer.
+Windows has partial live validation on 1.15.0. macOS and Linux validation
+are pending.
 
 ## Try the development build
 
@@ -17,7 +18,7 @@ validation on Obsidian 1.15.0. macOS and Linux validation are pending.
 ## Current state
 
 Milestone 2 Stage 1 is implemented with the narrow-window, close-button and
-new-tab fixes. The build and all 79 automated checks passed. On Windows with
+new-tab fixes. The build and all 81 automated checks passed. On Windows with
 Obsidian 1.15.0, the controls and slider left the note title visible at 639 px,
 the standard window X closed PopNote cleanly, and + and Ctrl+T kept the
 dedicated window at its saved 70% opacity. On a full restart with two PopNote
@@ -69,6 +70,12 @@ Use a disposable test vault only. Load the built `main.js`, `manifest.json`
 and `styles.css` from `<test-vault>/.obsidian/plugins/popnote/` by copying them
 or linking the project folder. Local settings (`data.json`), vault content,
 logs, build output and personal planning/instruction files are excluded from Git.
+
+## Local diagnostics
+
+PopNote saves its settings in the vault's plugin data. Recent startup and window
+diagnostics, which may include vault-relative note paths, are stored in Obsidian's
+local storage for troubleshooting. The plugin makes no network requests.
 
 ## GUI coverage and result record
 
@@ -530,14 +537,23 @@ the 80-100% / 1% step / 90% default opacity change remain deferred. v0.1 stays o
   with the saved size, position, and opacity.
 - [x] After quitting with a two-tab PopNote open, the ordinary Other.md pop-out
   restored. PopNote stayed closed until Ctrl+Alt+P summoned it.
-- [ ] Slider value changes, native dragging and resizing, and pinning.
+- [x] The opacity slider changed from 70% to 80% and saved the value. It was
+  restored to 70%.
+- [x] The Windows Move and Size menu commands changed the saved position and
+  width. Resummoning restored the new bounds and 70% opacity.
+- [x] Pin and unpin matched Electron's native state, including after the
+  pop-out lost focus. On Windows the fallback pin level may sit above the
+  taskbar if the window overlaps it.
+- [ ] Pointer dragging by the PopNote handle and pointer resizing by the
+  window border. Automated pointer input also failed to move Obsidian's
+  title bar. The keyboard Move and Size checks cover geometry persistence.
 - [ ] Repeat mixed-tab movement, disable/re-enable, and keyboard focus recovery
   with this build. The earlier GUI results below apply to the earlier build.
 - [ ] Alternate themes and fonts, narrower sizes, zoom, interrupted shutdown,
   frame-by-frame flash detection, macOS, and Linux.
 
-The build and all 79 automated checks passed, including tab ownership,
-release cleanup, and restart filtering. Stage 2 and v0.1 remain deferred.
+The build and all 81 automated checks passed, including tab ownership,
+release cleanup, restart filtering, and pin readback. Stage 2 and v0.1 remain deferred.
 
 **Windows hover-reveal result reported 2026-11-07 — pass in test_vault.**
 

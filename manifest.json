@@ -2,8 +2,8 @@
   "id": "popnote",
   "name": "PopNote",
   "version": "0.0.1",
-  "minAppVersion": "1.8.7",
-  "description": "Temporary spike: floating note, pin, opacity and global shortcut.",
-  "author": "",
+  "minAppVersion": "1.15.0",
+  "description": "Open a note in a floating desktop window with a global shortcut, pinning, and opacity controls.",
+  "author": "JD",
   "isDesktopOnly": true
 }

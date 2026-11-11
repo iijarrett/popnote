@@ -23,7 +23,7 @@ type NativeWindow = {
   setBounds(bounds: WindowBounds): void;
   on(event: string, listener: () => void): void;
   removeListener(event: string, listener: () => void): void;
-  setAlwaysOnTop(value: boolean): void;
+  setAlwaysOnTop(value: boolean, level?: "pop-up-menu"): void;
   isAlwaysOnTop(): boolean;
   setOpacity(value: number): void;
   getOpacity?(): number;
@@ -46,6 +46,7 @@ export class SpikeNative {
   constructor(
     report: (message: string) => void,
     private trace: (event: string, details: Record<string, unknown>) => void = () => {},
+    private pinFallbackLevel?: "pop-up-menu",
   ) {
     this.report = report;
     for (const load of [
@@ -299,7 +300,14 @@ export class SpikeNative {
       if (!window) return false;
       this.method(window, "setAlwaysOnTop");
       this.method(window, "isAlwaysOnTop");
-      return this.change("Pin", window, () => window.isAlwaysOnTop(), (before) => window.setAlwaysOnTop(before), value);
+      const read = () => window.isAlwaysOnTop();
+      return this.change("Pin", window, read, (pinned) => {
+        window.setAlwaysOnTop(pinned);
+        if (pinned && this.pinFallbackLevel && !read()) {
+          window.setAlwaysOnTop(true, this.pinFallbackLevel);
+        }
+        if (read() !== pinned) throw new Error("the window manager did not apply the requested pin state");
+      }, value);
     }) ?? false;
   }
 

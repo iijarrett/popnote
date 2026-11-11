@@ -42,6 +42,7 @@ export default class PopNoteSpike extends Plugin {
     const defaults = {
       shortcut: Platform.isMacOS ? "Command+Option+P" : "Control+Alt+P",
       allSpaces: Platform.isMacOS,
+      pinFallbackLevel: Platform.isWin ? "pop-up-menu" as const : undefined,
     };
     this.shortcut = defaults.shortcut;
     await this.loadWindowSettings();
@@ -52,7 +53,7 @@ export default class PopNoteSpike extends Plugin {
     this.native = new SpikeNative((message) => {
       console.info(`[PopNote spike] ${message}`);
       this.trace("native-action", { message });
-    }, (event, details) => this.trace(event, details));
+    }, (event, details) => this.trace(event, details), defaults.pinFallbackLevel);
     this.registerEvent(this.app.workspace.on("window-open", () => this.traceLayout("workspace-window-open")));
     this.registerEvent(this.app.workspace.on("window-close", () => this.traceLayout("workspace-window-close")));
     this.registerEvent(this.app.workspace.on("layout-change", () => {
