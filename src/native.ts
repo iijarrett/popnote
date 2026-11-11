@@ -333,13 +333,13 @@ export class SpikeNative {
   }
 
   registerShortcut(accelerator: string, callback: () => void): boolean {
-    // Unregister only our tracked accelerator, never another plugin's shortcut.
-    if (!this.unregisterShortcut()) return false;
+    if (accelerator === this.accelerator) return true;
     return this.attempt("Global shortcut", () => {
       const shortcuts = this.remote.globalShortcut;
       this.method(shortcuts, "register");
       this.method(shortcuts, "unregister");
       const registered = shortcuts.register(accelerator, () => {
+        if (this.accelerator !== accelerator) return;
         try {
           callback();
         } catch {
@@ -348,6 +348,11 @@ export class SpikeNative {
       });
       if (!registered) {
         new Notice(`PopNote: shortcut ${accelerator} was refused. Try another combination.`);
+        return false;
+      }
+      // Keep the previous binding until the replacement has registered.
+      if (!this.unregisterShortcut()) {
+        shortcuts.unregister(accelerator);
         return false;
       }
       this.accelerator = accelerator;

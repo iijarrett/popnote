@@ -7,16 +7,15 @@ import ts from "typescript";
 import { domHost } from "./dom-host.mjs";
 
 function host(options = {}) {
-  const dom = domHost(), { document, fire } = dom, timers = new Map(), calls = [];
-  let timer = 0, allowed = true;
+  const dom = domHost(), { document, fire } = dom, calls = [];
+  let allowed = true;
   const parent = document.createElement("section"), note = document.createElement("textarea"), root = document.createElement("div");
   document.body.append(parent); parent.append(note, root); root.className = "popnote-overlay"; note.focus();
   const file = new URL("../src/overlay.ts", import.meta.url);
   const source = existsSync(file) ? readFileSync(file, "utf8") : "";
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
   const module = { exports: {} };
-  vm.runInNewContext(code, { module, exports: module.exports, crypto: { randomUUID },
-    setTimeout: fn => { const id = ++timer; timers.set(id, fn); return id; }, clearTimeout: id => timers.delete(id) });
+  vm.runInNewContext(code, { module, exports: module.exports, crypto: { randomUUID } });
   const overlay = new module.exports.OverlayControls(root, "Welcome.md", false, 0.4, {
     allowed: () => allowed,
     pin: value => { calls.push(["pin", value]); return options.pin !== false; },
@@ -26,30 +25,41 @@ function host(options = {}) {
   const recovery = dom.label(root, "Show PopNote controls"), bar = dom.label(root, "PopNote controls");
   const pin = dom.label(root, "Keep PopNote on top"), opacity = dom.label(root, "Window opacity");
   const range = dom.label(root, "Opacity");
-  const trigger = dom.all(root).find(element => element.className === "popnote-overlay-trigger");
-  return { ...dom, overlay, root, parent, note, bar, recovery, pin, opacity, range, trigger, timers, calls,
-    release() { allowed = false; }, tick() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
+  return { ...dom, overlay, root, parent, note, bar, recovery, pin, opacity, range, calls,
+    release() { allowed = false; },
     moveToNote() { fire(note, "pointermove"); },
   };
 }
 
-test("hover reveal preserves note nodes and has an always-available accessible recovery button", () => {
-  const h = host(); assert.equal(h.bar.hidden, true); assert.equal(h.recovery.hidden, false);
-  assert.equal(h.recovery.type, "button");
-  assert.equal(h.range.value, "0.4"); assert.equal(h.range.min, "0.3"); assert.equal(h.range.max, "1"); assert.equal(h.range.step, "0.1");
-  h.fire(h.trigger, "pointerenter"); assert.equal(h.bar.hidden, false);
-  assert.equal(h.document.activeElement, h.note, "hover must not steal editor focus");
-  h.moveToNote(); assert.equal(h.bar.hidden, true);
-  assert.deepEqual(h.parent.children, [h.note, h.root]); assert.equal(h.note.parentNode, h.parent);
-  assert.deepEqual(h.calls, []);
+test("only activation reveals both controls; another activation closes them", () => {
+  const h = host();
+  assert.equal(h.bar.hidden, true);
+  assert.equal(h.recovery.hidden, false);
+  assert.equal(h.range.min, "0.3");
+  assert.equal(h.range.max, "1");
+  assert.equal(h.range.step, "0.01");
+  h.fire(h.root, "pointerenter");
+  h.fire(h.root, "pointermove");
+  h.recovery.focus();
+  assert.equal(h.bar.hidden, true);
+  h.fire(h.recovery, "click");
+  assert.equal(h.bar.hidden, false);
+  assert.equal(h.recovery.getAttribute("aria-expanded"), "true");
+  h.moveToNote();
+  assert.equal(h.bar.hidden, false);
+  h.fire(h.recovery, "click");
+  assert.equal(h.bar.hidden, true);
+  assert.equal(h.recovery.getAttribute("aria-expanded"), "false");
+  assert.deepEqual(h.parent.children, [h.note, h.root]);
 });
 
-test("focus and panel interaction keep controls visible; Escape returns focus without intercepting Tab", () => {
-  const h = host(); h.recovery.focus(); assert.equal(h.bar.hidden, false);
-  h.pin.focus(); h.moveToNote(); assert.equal(h.bar.hidden, false);
+test("keyboard activation and Escape manage focus without intercepting Tab", () => {
+  const h = host(); h.recovery.focus();
+  h.fire(h.recovery, "click");
+  h.pin.focus(); h.moveToNote();
+  assert.equal(h.bar.hidden, false);
   h.fire(h.opacity, "click"); assert.equal(h.opacity.getAttribute("aria-expanded"), "true");
   assert.equal(h.document.activeElement, h.range);
-  h.moveToNote(); assert.equal(h.bar.hidden, false);
   assert.equal(h.fire(h.range, "keydown", { key: "Tab" }).defaultPrevented, false);
   h.fire(h.range, "keydown", { key: "Escape" });
   assert.equal(h.opacity.getAttribute("aria-expanded"), "false"); assert.equal(h.document.activeElement, h.opacity);
@@ -58,46 +68,36 @@ test("focus and panel interaction keep controls visible; Escape returns focus wi
   assert.equal(h.fire(h.note, "keydown", { key: "Tab" }).defaultPrevented, false);
 });
 
-test("slider pointer use and movement remain visible until interaction ends", () => {
-  const h = host(); h.overlay.recover(); h.fire(h.opacity, "click");
-  h.fire(h.range, "pointerdown", { pointerId: 9 }); h.note.focus(); h.moveToNote(); h.tick();
-  assert.equal(h.bar.hidden, false);
-  h.fire(h.window, "pointerup", { pointerId: 9 }); h.fire(h.note, "pointerdown"); h.moveToNote();
+test("clicking outside closes both controls and the slider", () => {
+  const h = host();
+  h.fire(h.recovery, "click"); h.fire(h.opacity, "click");
+  h.fire(h.note, "pointerdown");
   assert.equal(h.bar.hidden, true);
-  h.fire(h.trigger, "pointerenter"); h.overlay.movement(); h.moveToNote();
-  assert.equal(h.bar.hidden, false); h.tick(); assert.equal(h.bar.hidden, false, "a pause in native dragging is not an end event");
-  h.moveToNote(); assert.equal(h.bar.hidden, true);
-});
-
-test("native drag area can stay revealed without relying on pointer events from the handle", () => {
-  const h = host(); h.fire(h.trigger, "pointerenter");
-  h.overlay.movement(); h.tick(); assert.equal(h.bar.hidden, false);
-  h.moveToNote(); assert.equal(h.bar.hidden, true);
+  assert.equal(h.opacity.getAttribute("aria-expanded"), "false");
 });
 
 test("pin, existing-range opacity delegate only while exclusively owned", () => {
   const h = host(); h.overlay.recover(); h.fire(h.pin, "click");
   assert.equal(h.pin.getAttribute("aria-pressed"), "true");
   assert.equal(h.label(h.root, "Close PopNote"), undefined);
-  h.range.value = "0.5"; h.fire(h.range, "input");
-  assert.deepEqual(h.calls, [["pin", true], ["opacity", 0.5]]);
+  h.range.value = "0.57"; h.fire(h.range, "input");
+  assert.deepEqual(h.calls, [["pin", true], ["opacity", 0.57]]);
   const stale = h.range.listeners.get("input")[0].fn;
   h.release(); h.fire(h.pin, "click"); stale({ target: h.range });
   assert.equal(h.root.isConnected, false); assert.equal(h.listenerCount(), 0);
-  assert.deepEqual(h.calls, [["pin", true], ["opacity", 0.5]]);
+  assert.deepEqual(h.calls, [["pin", true], ["opacity", 0.57]]);
 });
 
 test("failed native controls revert and disable only the unavailable control", () => {
-  const h = host({ opacity: false }); h.overlay.recover(); h.range.value = "0.5"; h.fire(h.range, "input");
+  const h = host({ opacity: false }); h.overlay.recover(); h.range.value = "0.57"; h.fire(h.range, "input");
   assert.equal(h.range.value, "0.4"); assert.equal(h.range.disabled, true); assert.equal(h.pin.disabled, false);
   h.fire(h.pin, "click"); assert.equal(h.pin.getAttribute("aria-pressed"), "true");
 });
 
-test("recovery does not focus an inactive window, and disposal removes listeners and delayed work", () => {
+test("recovery does not focus an inactive window, and disposal removes listeners", () => {
   const h = host(); h.document.focused = false; h.overlay.recover(true);
   assert.equal(h.document.activeElement, h.note); assert.equal(h.bar.hidden, false);
-  h.overlay.movement(); const late = [...h.timers.values()][0];
-  h.overlay.dispose(); h.overlay.dispose(); late(); h.overlay.recover(true);
-  assert.equal(h.root.isConnected, false); assert.equal(h.listenerCount(), 0); assert.equal(h.timers.size, 0);
+  h.overlay.dispose(); h.overlay.dispose(); h.overlay.recover(true);
+  assert.equal(h.root.isConnected, false); assert.equal(h.listenerCount(), 0);
   assert.deepEqual(h.parent.children, [h.note]); assert.deepEqual(h.calls, []);
 });

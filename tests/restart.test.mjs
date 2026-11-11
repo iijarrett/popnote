@@ -225,10 +225,15 @@ test("startup registers the saved shortcut without creating a pop-out; summon re
   h.keys.get("Control+Alt+Shift+P")(); await settle();
   assert.deepEqual(h.opened, ["notes/A.md"]);
   assert.deepEqual(structuredClone(h.windows[0].bounds), settings.windowBounds);
-  assert.equal(h.windows[0].alpha, 0.6);
+  const [window] = h.windows;
+  assert.equal(window.alpha, 0.6);
   h.keys.get("Control+Alt+Shift+P")(); await settle();
+  assert.equal(window.visible, false);
+  assert.equal(window.destroyed, false);
   h.keys.get("Control+Alt+Shift+P")(); await settle();
-  assert.equal(h.windows.length, 1);
+  assert.deepEqual(h.windows, [window]);
+  assert.equal(window.visible, true);
+  assert.equal(window.focused, true);
   h.plugin.onunload(); await settle();
 });
 
@@ -240,6 +245,7 @@ test("prepare and successful Apply survive restart; refused shortcuts never repl
   assert.equal(h.disk().shortcut, "Control+Alt+Shift+P");
   const count = h.writes.length;
   h.plugin.applyShortcut("Taken"); await settle();
+  assert.equal(h.keys.has("Control+Alt+Shift+P"), true);
   assert.equal(h.writes.length, count);
   h.commands.get("prepare-spike")(); await settle();
   assert.equal(h.disk().shortcut, "Control+Alt+Shift+P");

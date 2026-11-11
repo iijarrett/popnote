@@ -16,23 +16,15 @@ export class OverlayControls {
   private range: HTMLInputElement;
   private output: HTMLElement;
   private disposed = false;
-  private hover = false;
-  private focused = false;
-  private manual = false;
+  private expanded = false;
   private panelOpen = false;
-  private moving = false;
-  private motionQuiet = false;
-  private pointers = new Set<number>();
   private returnFocus: HTMLElement | null = null;
-  private motionTimer?: ReturnType<typeof setTimeout>;
   private cleanup: Array<() => void> = [];
 
   constructor(private root: HTMLElement, note: string, private pinned: boolean,
     private opacity: number, private actions: OverlayActions) {
     this.document = root.ownerDocument;
     const id = `popnote-controls-${globalThis.crypto.randomUUID()}`;
-    const trigger = this.element("div", "popnote-overlay-trigger", root);
-    trigger.setAttribute("aria-hidden", "true");
     this.recovery = this.button("⋯", "Show PopNote controls", root);
     this.recovery.className = "popnote-overlay-recovery";
     this.recovery.setAttribute("aria-controls", id);
@@ -60,7 +52,7 @@ export class OverlayControls {
     this.range.type = "range";
     this.range.min = "0.3";
     this.range.max = "1";
-    this.range.step = "0.1";
+    this.range.step = "0.01";
     this.range.setAttribute("aria-label", "Opacity");
     label.htmlFor = this.range.id;
     this.output = this.element("output", "popnote-overlay-value", this.panel);
@@ -68,51 +60,16 @@ export class OverlayControls {
     this.range.disabled = true;
     this.updateValues();
 
-    this.listen(trigger, "pointerenter", () => {
-      this.rememberFocus(this.document.activeElement);
-      this.hover = true;
-      this.render();
+    this.listen(this.recovery, "click", () => {
+      if (this.expanded) this.setExpanded(false);
+      else this.recover();
     });
-    this.listen(this.recovery, "click", () => this.recover());
     this.listen(root, "focusin", (event) => {
       this.rememberFocus((event as FocusEvent).relatedTarget);
-      this.focused = true;
-      this.render();
     });
-    this.listen(root, "focusout", (event) => {
-      this.focused = root.contains((event as FocusEvent).relatedTarget as Node | null);
-      if (!this.focused && !this.pointers.size) this.panelOpen = false;
-      this.render();
-    });
-    this.listen(this.document, "pointermove", (event) => {
-      // Native dragging suppresses client pointer events. A quiet move stream
-      // alone cannot prove the user released the drag handle.
-      if (this.motionQuiet) this.moving = false;
-      this.hover = root.contains(event.target as Node | null);
-      if (!this.hover) this.manual = false;
-      this.render();
-    }, true);
     this.listen(this.document, "pointerdown", (event) => {
-      if (this.motionQuiet) this.moving = false;
-      if (root.contains(event.target as Node | null)) {
-        if ((event as PointerEvent).button === 0) this.pointers.add((event as PointerEvent).pointerId);
-      } else {
-        this.panelOpen = false;
-        this.manual = false;
-        this.hover = false;
-      }
-      this.render();
+      if (this.expanded && !root.contains(event.target as Node | null)) this.setExpanded(false);
     }, true);
-    const endPointer = (event: Event) => {
-      this.pointers.delete((event as PointerEvent).pointerId);
-      if (!this.focused && !this.hover) this.panelOpen = false;
-      this.render();
-    };
-    if (this.document.defaultView) {
-      this.listen(this.document.defaultView, "pointerup", endPointer, true);
-      this.listen(this.document.defaultView, "pointercancel", endPointer, true);
-      this.listen(this.document.defaultView, "blur", () => { this.pointers.clear(); this.render(); });
-    }
     this.listen(root, "keydown", (event) => {
       if ((event as KeyboardEvent).key !== "Escape") return;
       event.preventDefault();
@@ -122,11 +79,10 @@ export class OverlayControls {
         this.render();
         this.opacityButton.focus();
       } else {
-        this.hover = this.manual = this.focused = false;
+        this.setExpanded(false);
         const target = this.returnFocus;
         if (target?.isConnected && target.ownerDocument === this.document) target.focus();
-        else (this.document.activeElement as HTMLElement | null)?.blur?.();
-        this.render();
+        else this.recovery.focus();
       }
     });
     this.listen(this.opacityButton, "click", () => {
@@ -190,7 +146,7 @@ export class OverlayControls {
 
   private updateValues(): void {
     const percent = `${Math.round(this.opacity * 100)}%`;
-    this.range.value = String(this.opacity);
+    if (Number(this.range.value) !== this.opacity) this.range.value = String(this.opacity);
     this.range.setAttribute("aria-valuetext", `${Math.round(this.opacity * 100)} percent`);
     this.opacityButton.textContent = percent;
     this.output.textContent = percent;
@@ -200,11 +156,16 @@ export class OverlayControls {
   }
 
   private render(): void {
-    const visible = this.hover || this.focused || this.manual || this.panelOpen || this.moving || this.pointers.size > 0;
-    this.bar.hidden = !visible;
-    this.panel.hidden = !visible || !this.panelOpen;
-    this.recovery.setAttribute("aria-expanded", String(visible));
+    this.bar.hidden = !this.expanded;
+    this.panel.hidden = !this.panelOpen;
+    this.recovery.setAttribute("aria-expanded", String(this.expanded));
     this.opacityButton.setAttribute("aria-expanded", String(this.panelOpen));
+  }
+
+  private setExpanded(expanded: boolean): void {
+    this.expanded = expanded;
+    if (!expanded) this.panelOpen = false;
+    this.render();
   }
 
   setNote(note: string): void {
@@ -222,29 +183,13 @@ export class OverlayControls {
   recover(focus = false): void {
     if (!this.allowed()) return;
     this.rememberFocus(this.document.activeElement);
-    this.manual = true;
-    this.render();
+    this.setExpanded(true);
     if (focus && this.document.hasFocus()) this.recovery.focus();
-  }
-
-  movement(): void {
-    if (!this.allowed()) return;
-    clearTimeout(this.motionTimer);
-    this.moving = true;
-    this.motionQuiet = false;
-    this.render();
-    this.motionTimer = setTimeout(() => {
-      this.motionTimer = undefined;
-      if (!this.allowed()) return;
-      this.motionQuiet = true;
-    }, 350);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    clearTimeout(this.motionTimer);
-    this.pointers.clear();
     for (const remove of this.cleanup.splice(0)) remove();
     this.root.remove();
   }

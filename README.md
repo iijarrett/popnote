@@ -13,12 +13,13 @@ are pending.
 2. Enable **PopNote** under **Settings → Community plugins**.
 3. Open a note and run **PopNote: Prepare spike from current note** once.
 4. On Windows, press **Ctrl+Alt+P** to summon or hide the pop-out. Use the
-   **⋯** button to reveal Pin and opacity.
+   **⋯** button to toggle Pin and the opacity control. Select the displayed
+   percentage to adjust opacity in 1% steps.
 
 ## Current state
 
 Milestone 2 Stage 1 is implemented with the narrow-window, close-button and
-new-tab fixes. The build and all 81 automated checks passed. On Windows with
+new-tab fixes. The build and all 80 automated checks passed. On Windows with
 Obsidian 1.15.0, the controls and slider left the note title visible at 639 px,
 the standard window X closed PopNote cleanly, and + and Ctrl+T kept the
 dedicated window at its saved 70% opacity. On a full restart with two PopNote
@@ -144,8 +145,8 @@ the ownership follow-up; do not repeat the older slider sweep unless approved.
 7. Manually restore Obsidian to open Settings -> PopNote. Enter **Super+Q** and
    click **Apply**. Minimize Obsidian again and test **Win+Q**. Registration
    success and actual behavior are separate results. If refused, try another
-   combination; Apply unregisters only PopNote's previous shortcut. A refused
-   replacement leaves no active shortcut until another Apply succeeds.
+   combination. Apply replaces the old binding after the new one registers.
+   A refused combination leaves the previous binding active.
 8. Use **Win+Tab**, right-click PopNote -> **Show this window on all desktops**.
    Switch desktops while visible, then hidden; summon it again. Record the ID,
    whether the desktop pin survives, and whether Windows changes desktops.
@@ -511,15 +512,15 @@ Crash/interrupted shutdown, Windows virtual-desktop pinning, macOS/Linux and
 frame-by-frame startup-flash checks remain later validation, not passed by this
 step. The unexplained exit's cause is still unknown; investigate if it recurs.
 The approved Stage 1 overlay is recorded below. Note picking, chrome hiding and
-the 80-100% / 1% step / 90% default opacity change remain deferred. v0.1 stays on hold.
+the proposed 80–100% opacity range and 90% default remain deferred. v0.1 stays on hold.
 
 ## Milestone 2 Stage 1 - compact controls and tab behavior
 
 - The controls occupy a slim row above the note, with a stable height when
-  hidden, revealed, or showing the inline opacity slider. Hover the row or
-  use **Show PopNote controls** (`⋯`) to reveal the drag handle, active tab
-  label, Pin and opacity. Obsidian provides the window close button.
-- The opacity slider uses 30–100% in 10% steps. The test vault's saved value
+  hidden, revealed, or showing the inline opacity slider. Click **⋯** to
+  toggle the drag handle, active tab label, Pin, and opacity. Clicking the
+  note dismisses the controls. Obsidian provides the window close button.
+- The opacity slider uses 30–100% in 1% steps. The test vault's saved value
   was 70% during the latest checks. **PopNote: Show controls** can be assigned
   an Obsidian hotkey. Escape closes the slider, then returns to the note.
 - Tabs opened with + or Obsidian's New tab command belong to the dedicated
@@ -552,10 +553,15 @@ the 80-100% / 1% step / 90% default opacity change remain deferred. v0.1 stays o
 - [ ] Alternate themes and fonts, narrower sizes, zoom, interrupted shutdown,
   frame-by-frame flash detection, macOS, and Linux.
 
-The build and all 81 automated checks passed, including tab ownership,
+The build and all 80 automated checks passed, including tab ownership,
 release cleanup, restart filtering, and pin readback. Stage 2 and v0.1 remain deferred.
 
-**Windows hover-reveal result reported 2026-11-07 — pass in test_vault.**
+The latest Windows check on Obsidian 1.15.0 confirmed that the same window
+comes forward when behind the main window, hides when focused, and returns
+when toggled again. The ⋯ button opened and closed the controls, and the
+slider changed native opacity from 70% to 71% before restoring 70%.
+
+**Historical Windows hover-reveal result reported 2026-11-07.**
 
 After toggling PopNote off/on, it stayed closed. Ctrl+Alt+P opened Welcome.md at
 40% while the main window remained minimized. Existing Obsidian chrome and the
@@ -577,7 +583,7 @@ the disposable test note; the change was undone. The temporary hotkey was
 removed. This confirms keyboard recovery and normal editor Tab behavior; it
 does not establish native pinning or slider value-change behavior.
 
-**First Windows scenario: hover reveal and note stability (passed; steps retained).**
+**Historical Windows scenario: hover reveal and note stability (previous build).**
 
 1. Settings -> Community plugins -> turn PopNote off, then on to load the build.
    Expect passive re-enable; ordinary windows remain.
@@ -619,6 +625,10 @@ restoration as a prerequisite. Do not change the global Ctrl+Alt+P shortcut.
    behavior, not a jump to PopNote controls. Press **Ctrl+Z** if Tab edited the
    note. Stop and report focus at each step, any hiding, and any main-window
    restoration. The temporary hotkey may be removed after the check.
+
+## License
+
+PopNote is released under the [MIT License](LICENSE).
 
 ## Technique credits
 

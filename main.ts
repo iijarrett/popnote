@@ -204,9 +204,10 @@ export default class PopNoteSpike extends Plugin {
       new Notice("PopNote: enter a shortcut first.");
       return;
     }
-    this.shortcutActive = this.native?.registerShortcut(accelerator, () => { void this.toggle("shortcut"); }) ?? false;
-    this.trace("shortcut-registration", { accelerator, success: this.shortcutActive, source: persist ? "apply" : "startup" });
-    if (this.shortcutActive) {
+    const registered = this.native?.registerShortcut(accelerator, () => { void this.toggle("shortcut"); }) ?? false;
+    this.trace("shortcut-registration", { accelerator, success: registered, source: persist ? "apply" : "startup" });
+    if (registered) {
+      this.shortcutActive = true;
       this.shortcut = accelerator;
       if (persist) {
         this.savedShortcut = accelerator;
@@ -293,7 +294,6 @@ export default class PopNoteSpike extends Plugin {
       this.trace("restore-request", { windowBounds: this.bounds, opacity: this.opacity });
       this.stopWatchingBounds = this.native.watchBounds((bounds) => {
         if (!allowed()) return;
-        overlay.movement();
         this.bounds = bounds;
         this.scheduleWindowSave();
       });
@@ -338,7 +338,7 @@ class SpikeSettings extends PluginSettingTab {
   display(): void {
     this.containerEl.empty();
     this.containerEl.createEl("p", {
-      text: "Prepare a note once. The note, successfully applied shortcut, size, position, and opacity are remembered. Show controls can be assigned a hotkey in Settings > Hotkeys; it does not change editor Tab behavior. Use Super+Q to test Win+Q. Restart diagnostics are kept locally and in the console.",
+      text: "Prepare a note once. The note, successfully applied shortcut, size, position, and opacity are remembered. Show controls can be assigned a hotkey in Settings > Hotkeys; it does not change editor Tab behavior. Choose a combination available to Obsidian. A refused change keeps the previous shortcut. Restart diagnostics are kept locally and in the console.",
     });
     let accelerator = this.spike.currentShortcut();
     new Setting(this.containerEl).setName("Global shortcut (spike)")

@@ -21,11 +21,6 @@
   display: none;
 }
 
-.popnote-overlay-trigger {
-  position: absolute;
-  inset: 0;
-}
-
 .popnote-overlay-recovery,
 .popnote-overlay-button {
   flex: none;
