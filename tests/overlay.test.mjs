@@ -21,14 +21,13 @@ function host(options = {}) {
     allowed: () => allowed,
     pin: value => { calls.push(["pin", value]); return options.pin !== false; },
     opacity: value => { calls.push(["opacity", value]); return options.opacity !== false; },
-    close: () => calls.push(["close"]),
   });
   overlay.setNativeAvailability(true, true);
   const recovery = dom.label(root, "Show PopNote controls"), bar = dom.label(root, "PopNote controls");
-  const pin = dom.label(root, "Keep PopNote on top"), opacity = dom.label(root, "Window opacity"), close = dom.label(root, "Close PopNote");
+  const pin = dom.label(root, "Keep PopNote on top"), opacity = dom.label(root, "Window opacity");
   const range = dom.label(root, "Opacity");
   const trigger = dom.all(root).find(element => element.className === "popnote-overlay-trigger");
-  return { ...dom, overlay, root, parent, note, bar, recovery, pin, opacity, close, range, trigger, timers, calls,
+  return { ...dom, overlay, root, parent, note, bar, recovery, pin, opacity, range, trigger, timers, calls,
     release() { allowed = false; }, tick() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
     moveToNote() { fire(note, "pointermove"); },
   };
@@ -76,15 +75,16 @@ test("native drag area can stay revealed without relying on pointer events from 
   h.moveToNote(); assert.equal(h.bar.hidden, true);
 });
 
-test("pin, existing-range opacity and close delegate only while exclusively owned", () => {
+test("pin, existing-range opacity delegate only while exclusively owned", () => {
   const h = host(); h.overlay.recover(); h.fire(h.pin, "click");
   assert.equal(h.pin.getAttribute("aria-pressed"), "true");
-  h.range.value = "0.5"; h.fire(h.range, "input"); h.fire(h.close, "click");
-  assert.deepEqual(h.calls, [["pin", true], ["opacity", 0.5], ["close"]]);
+  assert.equal(h.label(h.root, "Close PopNote"), undefined);
+  h.range.value = "0.5"; h.fire(h.range, "input");
+  assert.deepEqual(h.calls, [["pin", true], ["opacity", 0.5]]);
   const stale = h.range.listeners.get("input")[0].fn;
   h.release(); h.fire(h.pin, "click"); stale({ target: h.range });
   assert.equal(h.root.isConnected, false); assert.equal(h.listenerCount(), 0);
-  assert.deepEqual(h.calls, [["pin", true], ["opacity", 0.5], ["close"]]);
+  assert.deepEqual(h.calls, [["pin", true], ["opacity", 0.5]]);
 });
 
 test("failed native controls revert and disable only the unavailable control", () => {

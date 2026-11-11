@@ -31,6 +31,11 @@ export function domHost(onListen = () => {}) {
     set isConnected(value) { this.connected = value; }
     get parentElement() { return this.parentNode instanceof Element ? this.parentNode : null; }
     append(...children) { for (const child of children) { child.remove(); child.parentNode = this; this.children.push(child); } }
+    insertBefore(child, reference) {
+      child.remove();
+      child.parentNode = this;
+      this.children.splice(this.children.indexOf(reference), 0, child);
+    }
     prepend(child) { child.remove(); child.parentNode = this; this.children.unshift(child); }
     remove() {
       if (this.parentNode?.children) this.parentNode.children = this.parentNode.children.filter(child => child !== this);
@@ -60,7 +65,8 @@ export function domHost(onListen = () => {}) {
   document.activeElement = document.body;
   function fire(target, type, init = {}) {
     const event = { type, target, relatedTarget: null, button: 0, pointerId: 1, defaultPrevented: false,
-      preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...init };
+      preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; },
+      stopImmediatePropagation() { this.stopped = true; }, ...init };
     const path = [];
     for (let node = target; node; node = node.parentNode) path.push(node);
     if (!path.includes(document) && target !== window && target.isConnected) path.push(document);

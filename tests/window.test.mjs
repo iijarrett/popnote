@@ -13,7 +13,7 @@ function host(options = {}) {
   let nextTimer = 0, detached = 0, opened = 0, claimed = 0, released = 0, removed = 0;
   const mainDocument = { defaultView: {} };
   const popoutDocument = { createElement: () => ({ ownerDocument: popoutDocument, isConnected: false, parentElement: null,
-    remove() { removed++; this.isConnected = false; this.parentElement = null; } }) };
+    remove() { if (options.removeControls) options.removeControls(); removed++; this.isConnected = false; this.parentElement = null; } }) };
   const win = {
     document: popoutDocument, closed: false,
     addEventListener(name, callback) { listeners.set(name, callback); },
@@ -47,12 +47,27 @@ function host(options = {}) {
     iterateAllLeaves: callback => leaves.forEach(callback) } };
   const compatibility = {
     canOpen: () => true,
-    claim(value) { assert.equal(value, leaf); claimed++; events.push("claim"); return options.claimFails !== true; },
+    claim(value) { assert.ok(leaves.includes(value)); claimed++; events.push("claim"); return options.claimFails !== true; },
     owns: () => claimed > released && options.claimFails !== true,
     release() { released++; return true; },
   };
-  const popout = new module.exports.SpikeWindow(app, compatibility, (event, details) => events.push({ event, details }));
+  const popout = new module.exports.SpikeWindow(app, compatibility, (event, details) => events.push({ event, details }), options.onRelease);
+  let second;
+  if (options.tabs) {
+    const tabs = { children: [leaf], currentTab: 0 };
+    leaf.parent = tabs;
+    app.workspace.createLeafInTabGroup = (group) => {
+      assert.equal(group, tabs);
+      second = { parent: tabs, view: { containerEl: { ownerDocument: popoutDocument, isConnected: true } },
+        getContainer: () => container, detach() { detached++; } };
+      tabs.children.push(second); leaves.push(second);
+      popout.checkOwnership();
+      return second;
+    };
+    app.workspace.setActiveLeaf = () => { tabs.currentTab = 1; };
+  }
   return {
+    get second() { return second; },
     popout, leaf, events, timers, observers, listeners, mainDocument, popoutDocument,
     counts: () => ({ detached, opened, claimed }), cleanup: () => ({ released, removed }),
     mix() { leaves.push({ getContainer: () => container }); },
@@ -156,4 +171,28 @@ test("closing immediately after attachment prevents returning a stale document f
   const h = host(); const result = assert.rejects(h.popout.open({}), /closed/);
   await settle(); h.attach(); h.popout.close(); await result;
   assert.equal(h.counts().detached, 1); assert.equal(h.popout.isOpen(), false);
+});
+
+test("focused overlay cleanup runs before removing its root", async () => {
+  let listenersActive = true;
+  const h = host({ attached: true, onRelease() { listenersActive = false; },
+    removeControls() { if (listenersActive) throw new DOMException("focusout removed the same node", "NotFoundError"); } });
+  await h.popout.open({});
+  h.popout.mountControls();
+  h.popout.close();
+  assert.equal(h.counts().detached, 1);
+  assert.deepEqual(h.cleanup(), { released: 1, removed: 1 });
+});
+
+test("a deliberate new tab is owned while an unrelated tab still releases the window", async () => {
+  const h = host({ attached: true, tabs: true });
+  await h.popout.open({});
+  assert.equal(h.popout.addTab(), true);
+  assert.ok(h.second);
+  assert.equal(h.counts().claimed, 2);
+  assert.equal(h.popout.isOpen(), true);
+  h.mix();
+  assert.equal(h.popout.isOpen(), false);
+  assert.equal(h.counts().detached, 0);
+  assert.equal(h.cleanup().released, 2);
 });

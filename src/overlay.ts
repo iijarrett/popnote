@@ -2,7 +2,6 @@ type OverlayActions = {
   allowed: () => boolean;
   pin: (value: boolean) => boolean;
   opacity: (value: number) => boolean;
-  close: () => void;
 };
 
 /** Owns only its controls and DOM listeners; native behavior stays in native.ts. */
@@ -10,6 +9,7 @@ export class OverlayControls {
   private document: Document;
   private recovery: HTMLButtonElement;
   private bar: HTMLElement;
+  private title: HTMLElement;
   private pinButton: HTMLButtonElement;
   private opacityButton: HTMLButtonElement;
   private panel: HTMLElement;
@@ -44,13 +44,11 @@ export class OverlayControls {
     drag.textContent = "⠿";
     drag.title = "Drag to move window. The standard title bar remains available.";
     drag.setAttribute("aria-hidden", "true");
-    const title = this.element("span", "popnote-overlay-note", this.bar);
-    title.textContent = note;
-    title.title = note;
+    this.title = this.element("span", "popnote-overlay-note", this.bar);
+    this.setNote(note);
     this.pinButton = this.button("Pin", "Keep PopNote on top", this.bar);
     this.opacityButton = this.button("", "Window opacity", this.bar);
-    const close = this.button("×", "Close PopNote", this.bar);
-    this.panel = this.element("div", "popnote-overlay-panel", root);
+    this.panel = this.element("div", "popnote-overlay-panel", this.bar);
     this.panel.id = `${id}-opacity`;
     this.panel.setAttribute("role", "group");
     this.panel.setAttribute("aria-label", "Window opacity controls");
@@ -151,7 +149,6 @@ export class OverlayControls {
       }
       this.updateValues();
     });
-    this.listen(close, "click", () => this.actions.close());
     this.render();
     this.allowed();
   }
@@ -208,6 +205,11 @@ export class OverlayControls {
     this.panel.hidden = !visible || !this.panelOpen;
     this.recovery.setAttribute("aria-expanded", String(visible));
     this.opacityButton.setAttribute("aria-expanded", String(this.panelOpen));
+  }
+
+  setNote(note: string): void {
+    this.title.textContent = note;
+    this.title.title = note;
   }
 
   setNativeAvailability(pin: boolean, opacity: boolean): void {

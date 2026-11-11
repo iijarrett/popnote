@@ -14,7 +14,7 @@ function host(initial = {}, options = {}) {
   const writes = [], logs = [], notices = [], commands = new Map(), events = new Map();
   const timers = new Map(), keys = new Map(), storage = options.storage ?? new Map();
   const sliders = [], toggles = [], windows = [], opened = [], file = new TFile("notes/A.md");
-  let timerId = 0, layoutReadyCallback, failSave = false;
+  let timerId = 0, layoutReadyCallback, failSave = false, activeLeaf;
   const mainWindow = {
     localStorage: {
       getItem: key => storage.get(key) ?? null,
@@ -34,6 +34,7 @@ function host(initial = {}, options = {}) {
   const workspace = {
     containerEl: element(mainDocument), layoutReady: false,
     getActiveFile: () => file,
+    getMostRecentLeaf: () => activeLeaf,
     iterateAllLeaves: callback => leaves.forEach(callback),
     onLayoutReady: callback => { layoutReadyCallback = callback; },
     on: (name, callback) => { events.set(name, callback); return { name }; },
@@ -86,14 +87,50 @@ function host(initial = {}, options = {}) {
       const header = doc.createElement("header"), content = doc.createElement("section");
       header.textContent = "Original Obsidian header";
       leaf.view.containerEl.append(header, content); leaf.view.contentEl = content;
+      if (options.tabGroup) {
+        const containerEl = element(doc);
+        const tabHeaderContainerEl = doc.createElement("header");
+        const tabsContainerEl = doc.createElement("section");
+        const newTab = doc.createElement("button");
+        newTab.closest = selector => selector === ".workspace-tab-header-new-tab" ? newTab : null;
+        tabHeaderContainerEl.append(newTab);
+        containerEl.append(tabHeaderContainerEl, tabsContainerEl);
+        tabsContainerEl.append(leaf.view.containerEl);
+        leaf.parent = { containerEl, tabHeaderContainerEl, tabsContainerEl, currentTab: 0, children: [leaf] };
+        win.newTab = newTab;
+        activeLeaf = leaf;
+        dom.window.addEventListener("keydown", event => {
+          if (event.ctrlKey && event.key === "t" && newTabCommand.checkCallback(false)) event.preventDefault();
+        }, true);
+      }
       win.dom = dom;
       windows.push(win); leaves.push(leaf);
       events.get("window-open")?.({}, doc.defaultView);
       return leaf;
     },
   };
+  if (options.tabGroup) {
+    workspace.createLeafInTabGroup = group => {
+      const first = group.children[0];
+      const tab = { ...first, id: "empty-" + leaves.length, parent: group,
+        view: { containerEl: element(first.getContainer().doc), getDisplayText: () => "New tab" },
+        getViewState: () => ({ type: "empty" }),
+      };
+      group.tabsContainerEl.append(tab.view.containerEl);
+      group.children.push(tab);
+      leaves.push(tab);
+      events.get("layout-change")?.();
+      return tab;
+    };
+    workspace.setActiveLeaf = leaf => {
+      activeLeaf = leaf;
+      leaf.parent.currentTab = leaf.parent.children.indexOf(leaf);
+      events.get("active-leaf-change")?.(leaf);
+    };
+  }
   const files = new Map([[file.path, file]]);
-  const app = { workspace, vault: { getName: () => "test_vault", getAbstractFileByPath: path => files.get(path) ?? null } };
+  const newTabCommand = { checkCallback: () => true };
+  const app = { workspace, commands: { findCommand: () => newTabCommand }, vault: { getName: () => "test_vault", getAbstractFileByPath: path => files.get(path) ?? null } };
   class Plugin {
     constructor() { this.app = app; }
     loadData = async () => structuredClone(disk);
@@ -161,7 +198,7 @@ function host(initial = {}, options = {}) {
       leaves.push(ordinary); return ordinary;
     },
     controls(index = 0) {
-      return windows[index].dom.all(leaves[index].view.containerEl).find(element =>
+      return windows[index].dom.all(windows[index].doc.body).find(element =>
         element.className === "popnote-overlay" || element.className === "popnote-spike");
     },
     move(leaf, destination) {
@@ -417,16 +454,15 @@ test("overlay recovery command stays passive and mounting preserves the original
   assert.equal(h.windows[0].dom.listenerCount(), 0); assert.equal(h.writes.length, 0);
 });
 
-test("overlay close closes only its exclusive leaf and cannot close a released tab or a later window", async () => {
+test("released overlay listeners cannot affect a later window", async () => {
   const h = host(guardedSettings); await h.plugin.onload(); h.keys.get(settings.shortcut)(); await settle();
-  const dom = h.windows[0].dom, close = dom.label(h.controls(), "Close PopNote");
-  const stale = close.listeners.get("click")[0].fn;
-  dom.fire(close, "click"); assert.equal(h.windows[0].destroyed, true);
+  const range = h.windows[0].dom.label(h.controls(), "Opacity");
+  const stale = range.listeners.get("input")[0].fn;
+  h.mix(h.leaves[0]); h.event("layout-change");
+  assert.equal(h.leaves[0].detaches, 0); assert.equal(h.windows[0].destroyed, false);
   h.keys.get(settings.shortcut)(); await settle();
-  stale({ target: close }); assert.equal(h.windows[1].destroyed, false);
-  const second = h.windows[1].dom.label(h.controls(1), "Close PopNote");
-  h.mix(h.leaves[1]); h.event("layout-change"); h.windows[1].dom.fire(second, "click");
-  assert.equal(h.leaves[1].detaches, 0); assert.equal(h.windows[1].destroyed, false);
+  range.value = "0.9"; stale({ target: range });
+  assert.equal(h.windows[1].alpha, 0.4);
 });
 
 test("routine native diagnostics stay in logs rather than visible Notices", async () => {
@@ -456,3 +492,32 @@ for (const trigger of ["layout-change", "show-controls"]) {
     h.plugin.onunload(); assert.equal(leaf.detaches, 0);
   });
 }
+
+test("native new-tab inputs keep window opacity, layout ownership, and the shared toolbar", async () => {
+  const h = host(guardedSettings, { tabGroup: true });
+  await h.plugin.onload();
+  h.keys.get(settings.shortcut)(); await settle();
+  const [win] = h.windows;
+  const root = h.controls();
+  const group = h.leaves[0].parent;
+  assert.equal(group.containerEl.children[1], root);
+  assert.equal(group.containerEl.children[2], group.tabsContainerEl);
+  assert.equal(win.dom.fire(win.newTab, "click").defaultPrevented, false);
+  assert.equal(win.dom.fire(win.newTab, "click", { isTrusted: true }).defaultPrevented, true);
+  const wrappedCommand = h.plugin.app.commands.findCommand().checkCallback;
+  assert.equal(win.dom.fire(group.tabsContainerEl, "keydown", {
+    isTrusted: true, key: "t", ctrlKey: true,
+  }).defaultPrevented, true);
+  assert.equal(group.children.length, 3);
+  assert.ok(group.children.every(tab => tab.id.startsWith("popnote-owned-v1:")));
+  assert.equal(h.plugin.app.workspace.getLayout().floating, undefined);
+  assert.equal(win.alpha, 0.4);
+  assert.equal(h.controls(), root);
+  assert.equal(win.dom.all(root).find(node => node.className === "popnote-overlay-note").textContent, "New tab");
+  h.mix(h.leaves[0]); h.event("layout-change");
+  assert.equal(h.controls(), undefined);
+  assert.notEqual(h.plugin.app.commands.findCommand().checkCallback, wrappedCommand);
+  assert.equal(win.alpha, 1);
+  assert.equal(group.children.length, 3);
+  assert.equal(win.destroyed, false);
+});

@@ -1,15 +1,28 @@
-# PopNote spike
+# PopNote
 
-Throwaway desktop experiment, not v0.1. No runtime npm dependencies.
+PopNote gives an Obsidian note its own floating desktop window. Use a global
+shortcut to show or hide it, pin it above other apps, and adjust its opacity.
+
+This is a development preview. The current build has partial Windows
+validation on Obsidian 1.15.0. macOS and Linux validation are pending.
+
+## Try the development build
+
+1. Follow [Build](#build) and load the plugin in a disposable vault.
+2. Enable **PopNote** under **Settings → Community plugins**.
+3. Open a note and run **PopNote: Prepare spike from current note** once.
+4. On Windows, press **Ctrl+Alt+P** to summon or hide the pop-out. Use the
+   **⋯** button to reveal Pin and opacity.
 
 ## Current state
 
-Milestone 2 Stage 1 overlay foundation is implemented (2026-11-07).
-`npm run build` and all 76 automated tests passed. The owner has now passed the
-Windows hover-reveal/note-stability and keyboard access/recovery checks for this
-overlay build. The remaining Stage 1 GUI checks are pending. The earlier Windows passes below apply to the
-exclusive-window guard build. Saved settings, including 40% opacity, are
-unchanged; existing Obsidian chrome remains visible. No Stage 2 work is included.
+Milestone 2 Stage 1 is implemented with the narrow-window, close-button and
+new-tab fixes. The build and all 79 automated checks passed. On Windows with
+Obsidian 1.15.0, the controls and slider left the note title visible at 639 px,
+the standard window X closed PopNote cleanly, and + and Ctrl+T kept the
+dedicated window at its saved 70% opacity. On a full restart with two PopNote
+tabs open, the ordinary pop-out restored and PopNote stayed closed until the
+shortcut summoned it. The scoped results and remaining checks are below.
 
 The three pinned packages resolved and the lockfile was reviewed. Dependency
 installation with scripts disabled and `npm run build` succeeded. The first
@@ -493,56 +506,38 @@ step. The unexplained exit's cause is still unknown; investigate if it recurs.
 The approved Stage 1 overlay is recorded below. Note picking, chrome hiding and
 the 80-100% / 1% step / 90% default opacity change remain deferred. v0.1 stays on hold.
 
-## Milestone 2 Stage 1 - overlay foundation, partial Windows GUI pass
+## Milestone 2 Stage 1 - compact controls and tab behavior
 
-Implemented scope:
+- The controls occupy a slim row above the note, with a stable height when
+  hidden, revealed, or showing the inline opacity slider. Hover the row or
+  use **Show PopNote controls** (`⋯`) to reveal the drag handle, active tab
+  label, Pin and opacity. Obsidian provides the window close button.
+- The opacity slider uses 30–100% in 10% steps. The test vault's saved value
+  was 70% during the latest checks. **PopNote: Show controls** can be assigned
+  an Obsidian hotkey. Escape closes the slider, then returns to the note.
+- Tabs opened with + or Obsidian's New tab command belong to the dedicated
+  PopNote window. Moving a tab out or bringing in an ordinary tab releases
+  the window and preserves its tabs as ordinary content. The next summon
+  opens a new dedicated window for the saved note.
+- PopNote-owned tabs are excluded from workspace restoration. The shortcut
+  restores the selected note, window geometry, and opacity.
 
-- The existing public note view's `contentEl` holds an absolutely positioned
-  overlay, below Obsidian's header. The note is not reparented; showing controls
-  adds no layout row. Only this owned host gets the positioning class. No
-  Obsidian tabs, headers, title-bar buttons or native decorations are hidden.
-- Hover the top edge of the note content to reveal the compact row: separate
-  drag handle, saved-note label, Pin, opacity percentage and Close. The label is
-  static; there is no note picker. A small, always-visible **Show PopNote
-  controls** button (`⋯`) also reveals the row.
-- The percentage opens a labelled slider panel using the existing 30-100%,
-  10% step behavior. Saved opacity remains 40%; there is no migration or change
-  to defaults. Pin and opacity still use the guarded native bridge.
-- Controls stay visible while focused, while the panel is open, during pointer
-  use, and through movement. Native CSS drag regions suppress pointer events;
-  a pause in movement does not itself hide the controls. They can collapse when
-  client pointer events resume over the note after movement settles.
-- Buttons and range use normal keyboard focus. Escape closes the opacity panel
-  first, then returns from the controls to the prior connected note element
-  when available. Tab is not intercepted. **PopNote: Show controls** can be
-  assigned an Obsidian hotkey; no new global shortcut or default binding is added.
-  Recovery never opens a window or focuses an inactive pop-out. The existing
-  title bar and resize borders remain available for ordinary window operations.
-- Close uses the existing exact-leaf guard. Release, disable and close remove
-  overlay nodes, host styling, listeners and timers. A view replacement inside
-  the same leaf also releases safely, preserving the tab as ordinary content;
-  the next explicit summon creates a dedicated window for the saved note.
-- Visible spike diagnostic rows and routine native-ID Notices are removed.
-  Native-ID/action and restart logs remain in the console/local trace. Feature
-  failure, shortcut-registration and ownership-release Notices remain.
+**Latest Windows smoke test — Obsidian 1.15.0 in test_vault.**
 
-Verification: `npm run build` passed; `node --test tests/*.test.mjs` passed all
-76 checks. These cover event/focus state with DOM doubles, legacy opacity and
-ordered settings saves, close/release/view replacement, stale callbacks and
-movement timers, passive recovery commands, listener cleanup and the existing
-native/workspace compatibility regressions. They do not measure rendered pixel
-positions or establish native drag behavior. Settings, dependency files and
-manifest are unchanged; `src/native.ts` and workspace-filter code are unchanged.
+- [x] At 639 px, the note title stayed visible with the controls and slider open.
+- [x] + and Ctrl+T opened tabs while keeping PopNote controls and 70% opacity.
+- [x] The standard X closed a two-tab PopNote. Ctrl+Alt+P reopened Welcome.md
+  with the saved size, position, and opacity.
+- [x] After quitting with a two-tab PopNote open, the ordinary Other.md pop-out
+  restored. PopNote stayed closed until Ctrl+Alt+P summoned it.
+- [ ] Slider value changes, native dragging and resizing, and pinning.
+- [ ] Repeat mixed-tab movement, disable/re-enable, and keyboard focus recovery
+  with this build. The earlier GUI results below apply to the earlier build.
+- [ ] Alternate themes and fonts, narrower sizes, zoom, interrupted shutdown,
+  frame-by-frame flash detection, macOS, and Linux.
 
-Owner-check status, one scenario at a time:
-
-- [x] Basic hover reveal and note stability: owner-reported pass below.
-- [x] Keyboard recovery/hotkey, Tab behavior, panel focus and Escape return: owner-reported pass below.
-- [ ] Slider interaction without hiding controls; leave the saved value at 40%.
-- [ ] Drag-handle hit-testing, pause during dragging and ordinary border resizing.
-- [ ] Close/reopen, mixed tabs/movement/view replacement, disable/re-enable and
-  restart regressions with the new overlay build.
-- [ ] Theme/font, narrow-window and zoom behavior.
+The build and all 79 automated checks passed, including tab ownership,
+release cleanup, and restart filtering. Stage 2 and v0.1 remain deferred.
 
 **Windows hover-reveal result reported 2026-11-07 — pass in test_vault.**
 
@@ -574,7 +569,7 @@ does not establish native pinning or slider value-change behavior.
    Expect the saved note/geometry at 40%, existing Obsidian chrome still visible,
    the small `⋯` button, and no bulky spike rows or native-ID Notice.
 3. Hover the top edge of the note content, below the existing header. Expect
-   the compact row to appear over the note without moving its text.
+   the compact controls to appear without moving note text.
 4. Move the pointer back over the note without clicking a control. Expect the
    row to hide, note text to stay put and `⋯` to remain available. Stop and report.
 
@@ -608,10 +603,6 @@ restoration as a prerequisite. Do not change the global Ctrl+Alt+P shortcut.
    behavior, not a jump to PopNote controls. Press **Ctrl+Z** if Tab edited the
    note. Stop and report focus at each step, any hiding, and any main-window
    restoration. The temporary hotkey may be removed after the check.
-
-Hover reveal/note stability and keyboard access/recovery are GUI-passed so far. Native pinning, interrupted shutdown,
-frame-by-frame flash detection, macOS/Linux and v0.1 remain pending. Stage 2,
-opacity migration and chrome hiding require separate approval; none starts here.
 
 ## Technique credits
 

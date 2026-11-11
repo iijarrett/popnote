@@ -1,15 +1,15 @@
-.popnote-overlay-host {
-  position: relative;
-}
-
 .popnote-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: var(--layer-popover);
-  pointer-events: none;
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--size-4-1);
+  block-size: calc(var(--input-height) + var(--size-4-1));
+  padding-inline: var(--size-4-2);
   color: var(--text-normal);
   font-family: var(--font-interface);
   font-size: var(--font-ui-small);
+  -webkit-app-region: no-drag;
 }
 
 .popnote-overlay,
@@ -23,59 +23,51 @@
 
 .popnote-overlay-trigger {
   position: absolute;
-  inset-inline: 0;
-  top: 0;
-  height: var(--size-4-2);
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
+  inset: 0;
 }
 
 .popnote-overlay-recovery,
 .popnote-overlay-button {
   flex: none;
-  min-height: var(--size-4-6);
-  padding: var(--size-2-1) var(--size-4-2);
+  block-size: var(--input-height);
+  padding-inline: var(--size-4-2);
   color: var(--text-normal);
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
   font: inherit;
-  pointer-events: auto;
   -webkit-app-region: no-drag;
 }
 
 .popnote-overlay-recovery {
-  position: absolute;
-  top: var(--size-4-2);
-  inset-inline-end: var(--size-4-2);
-  width: var(--size-4-6);
-  height: var(--size-4-6);
+  position: relative;
+  order: 1;
+  margin-inline-start: auto;
+  inline-size: var(--input-height);
   padding: 0;
 }
 
 .popnote-overlay-bar,
 .popnote-overlay-panel {
-  position: absolute;
-  padding: var(--size-4-1);
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
-}
-
-.popnote-overlay-bar {
-  top: var(--size-4-2);
-  inset-inline-start: var(--size-4-2);
-  inset-inline-end: calc(var(--size-4-6) + var(--size-4-4));
   display: flex;
   align-items: center;
   gap: var(--size-4-1);
+  min-inline-size: 0;
+}
+
+.popnote-overlay-bar {
+  position: relative;
+  flex: 1;
+  pointer-events: none;
+}
+
+.popnote-overlay-bar > :not(.popnote-overlay-note) {
+  pointer-events: auto;
 }
 
 .popnote-overlay-note {
   flex: 1;
-  min-width: 0;
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -83,7 +75,7 @@
 
 .popnote-overlay-drag {
   flex: none;
-  width: var(--size-4-6);
+  inline-size: var(--size-4-5);
   text-align: center;
   user-select: none;
   cursor: move;
@@ -91,17 +83,23 @@
 }
 
 .popnote-overlay-panel {
-  top: calc(var(--input-height) + var(--size-4-4));
-  inset-inline-end: var(--size-4-2);
-  width: min(calc(100% - var(--size-4-4)), 16rem);
-  display: flex;
-  align-items: center;
-  gap: var(--size-4-2);
+  flex: 1 1 8rem;
+  max-inline-size: 12rem;
 }
 
 .popnote-overlay-range {
   flex: 1;
-  min-width: 0;
+  min-inline-size: 0;
+}
+
+.popnote-overlay-label,
+.popnote-overlay-value {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .popnote-overlay :focus-visible {

@@ -58,7 +58,9 @@ export default class PopNoteSpike extends Plugin {
     this.registerEvent(this.app.workspace.on("layout-change", () => {
       this.popout?.checkOwnership();
       this.compatibility?.audit();
+      this.refreshOverlayLabel();
     }));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.refreshOverlayLabel()));
     this.app.workspace.onLayoutReady(() => {
       if (!this.stopped) {
         this.compatibility?.finishStartup();
@@ -216,15 +218,22 @@ export default class PopNoteSpike extends Plugin {
     return this.shortcut;
   }
 
+  private refreshOverlayLabel(): void {
+    if (!this.overlay) return;
+    const label = this.popout?.noteLabel();
+    if (label !== undefined) this.overlay?.setNote(label);
+  }
+
   private releaseWindowBinding(reason: string): void {
     this.operation++;
     this.busy = false;
     this.stopWatchingBounds?.();
     this.stopWatchingBounds = undefined;
     this.flushWindowSave();
-    this.overlay?.dispose();
+    const overlay = this.overlay;
     this.overlay = undefined;
-    this.native?.release();
+    try { overlay?.dispose(); }
+    finally { this.native?.release(); }
     if (reason === "window is no longer exclusively owned" && !this.stopped) {
       new Notice("PopNote: window released as ordinary workspace content. Summon again for a dedicated PopNote.");
     }
@@ -275,7 +284,6 @@ export default class PopNoteSpike extends Plugin {
           this.queueSave("opacity");
           return true;
         },
-        close: () => { if (allowed()) this.popout?.close(); },
       });
       this.stopWatchingBounds?.();
       this.stopWatchingBounds = undefined;
