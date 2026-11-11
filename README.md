@@ -7,6 +7,15 @@ This is a development preview. It requires Obsidian 1.15.0 or newer.
 Windows and Kali WSLg have partial live validation on 1.15.0. macOS and
 other Linux desktops still need live checks.
 
+## Install from GitHub
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the
+   [GitHub release](https://github.com/iijarrett/popnote/releases/latest).
+2. Copy all three files into `.obsidian/plugins/popnote/` in a disposable
+   vault. Restart Obsidian or reload its Community plugins list.
+3. Enable **PopNote** in **Settings → Community plugins** and follow the
+   note and shortcut steps below.
+
 ## Try the development build
 
 1. Follow [Build](#build) and load the plugin in a disposable vault.
