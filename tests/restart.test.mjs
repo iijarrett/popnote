@@ -70,6 +70,7 @@ function host(initial = {}, options = {}) {
         getNormalBounds: () => win.bounds, setBounds: value => { win.bounds = value; },
         pinned: false, isAlwaysOnTop: () => win.pinned, setAlwaysOnTop: value => { win.pinned = value; },
         setOpacity: value => { win.alpha = value; }, getOpacity: () => win.alpha,
+        min: [0, 0], getMinimumSize: () => win.min, setMinimumSize: (width, height) => { win.min = [width, height]; },
         on: (name, callback) => { listeners.set(name, callback); },
         removeListener: name => { listeners.delete(name); },
         emit: name => listeners.get(name)?.(),

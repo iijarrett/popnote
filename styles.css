@@ -13,9 +13,8 @@
 }
 
 .popnote-overlay-in-tab-header {
-  flex: 0 1 auto;
+  flex: none;
   block-size: 100%;
-  min-inline-size: 0;
   padding-inline: var(--size-4-1);
 }
 
@@ -23,13 +22,48 @@
   display: none;
 }
 
+/* The opacity slider opens as a popover under the tab strip, so it never competes with the controls for room. */
 .popnote-overlay-in-tab-header .popnote-overlay-panel {
-  flex: 0 1 auto;
-  inline-size: clamp(var(--size-4-8), 16vw, 7rem);
+  position: fixed;
+  z-index: var(--layer-popover);
+  inset-block-start: var(--header-height);
+  inset-inline-end: var(--size-4-2);
+  inline-size: min(16rem, calc(100vw - var(--size-4-4)));
+  max-inline-size: none;
+  padding: var(--size-4-2);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+  pointer-events: auto;
 }
 
 .popnote-overlay-in-tab-header .popnote-overlay-range {
   inline-size: 100%;
+}
+
+/* Keep a grab area: the tab strip is how the window is moved, so its empty part never shrinks away. */
+.popnote-overlay-host .workspace-tab-header-spacer {
+  flex: 1 0 var(--size-4-8);
+  min-inline-size: var(--size-4-8);
+  -webkit-app-region: drag;
+}
+
+/* Narrow windows: the note title is already shown in the view header, so the tab strip steps aside.
+   What stays is the grab area, the PopNote buttons and the window controls. */
+@media (max-width: 32rem) {
+  .popnote-overlay-host .workspace-tab-header-container-inner,
+  .popnote-overlay-host .workspace-tab-header-new-tab,
+  .popnote-overlay-host .workspace-tab-header-tab-list,
+  .popnote-overlay-in-tab-header .popnote-overlay-drag {
+    display: none;
+  }
+}
+
+@media (max-width: 22rem) {
+  .popnote-overlay-in-tab-header .popnote-overlay-button {
+    padding-inline: var(--size-4-1);
+  }
 }
 
 .popnote-overlay,

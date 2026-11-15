@@ -21,6 +21,8 @@ type NativeWindow = {
   hide(): void;
   getNormalBounds(): Rectangle;
   setBounds(bounds: WindowBounds): void;
+  setMinimumSize?(width: number, height: number): void;
+  getMinimumSize?(): number[];
   on(event: string, listener: () => void): void;
   removeListener(event: string, listener: () => void): void;
   setAlwaysOnTop(value: boolean, level?: "pop-up-menu"): void;
@@ -30,6 +32,9 @@ type NativeWindow = {
   setVisibleOnAllWorkspaces(value: boolean): void;
   isVisibleOnAllWorkspaces(): boolean;
 };
+
+/** Below this the tab strip cannot hold PopNote's controls plus a place to grab the window. */
+export const MINIMUM_WINDOW = { width: 300, height: 160 };
 
 export class PopNoteNative {
   private remote: any = null;
@@ -240,7 +245,9 @@ export class PopNoteNative {
       this.method(window, "getNormalBounds");
       const apply = (value: WindowBounds) => this.change("Restore window bounds", window,
         () => window.getNormalBounds(), (before) => window.setBounds(before), value);
-      const { x, y, width, height } = bounds;
+      const width = Math.max(bounds.width, MINIMUM_WINDOW.width);
+      const height = Math.max(bounds.height, MINIMUM_WINDOW.height);
+      const { x, y } = bounds;
       if (x === undefined || y === undefined || !this.canPositionWindow()) {
         apply({ width, height });
         return;
@@ -291,6 +298,19 @@ export class PopNoteNative {
       }
       this.stopBounds = remove;
       return remove;
+    });
+  }
+
+  /** Stops the window being dragged smaller than its controls; undone with the other native changes. */
+  minimumSize(): void {
+    this.attempt("Minimum window size", () => {
+      const window = this.liveWindow();
+      if (!window) return;
+      this.method(window, "setMinimumSize");
+      this.method(window, "getMinimumSize");
+      this.change("Minimum window size", window,
+        () => { const [width, height] = window.getMinimumSize!(); return { width, height }; },
+        (size) => window.setMinimumSize!(size.width, size.height), { ...MINIMUM_WINDOW });
     });
   }
 

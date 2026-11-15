@@ -21,6 +21,11 @@ A macOS restart and shortcut registration issue remains open.
 1. In the disposable vault, open a note and run **PopNote: Use current note** once.
 2. Press **Ctrl+Alt+P** on Windows or **Command+Option+P** on macOS to summon
    or hide the pop-out. If the shortcut is unavailable, use **PopNote: Toggle window** from the command palette.
+   **Choosing a shortcut:** type it in Settings -> PopNote without spaces, such
+   as `Ctrl+Alt+P`. Use **Super** for the Windows key, so Win+Q is `Super+Q`. On a
+   Mac use `Command+Option+P`. Owner report: `Win + Q` brought PopNote up and hid
+   it once, then stopped responding, and `Super+Q` worked repeatedly. Whether the
+   spelling or something else caused the failure was not established.
 3. Open **⋯** to reveal Pin and the opacity control. Select the displayed
    percentage to adjust opacity in 1% steps on supported desktops.
 
@@ -43,6 +48,44 @@ Notice, and the window may restore after a restart. At startup PopNote also
 releases a stale registration of its own saved shortcut before registering it.
 The build and all 87 automated checks pass; none of this has been checked in a
 live GUI yet.
+
+Screen-driven Windows check, 2026-11-15, test_vault, Obsidian 1.15.1
+(Obsidian updated itself from 1.15.0 during the session), build
+0b274ca0... plus the settings-text change. Window state was read from Win32
+(visible, foreground, topmost, layered alpha), not from screenshots. With the
+default Ctrl+Alt+P and a maximized Notepad behind: create, hide, show, hide, show
+worked in front each time; a visible PopNote behind Notepad was raised by the
+shortcut. Pin made the window topmost over Notepad and unpin released it.
+The slider set native alpha 127 (50%) and saved 0.5; a full quit to zero
+processes and relaunch left PopNote closed, and the shortcut then restored the
+note, bounds and 50%. Opacity was set back to 100%. Not covered: Super+Q
+(another vault held it), pointer drag and resize, and virtual desktops.
+
+The installed-method tests were then ported to the Obsidian 1.15.1 archive: the
+minified names were re-mapped, and the tab-rendering check now follows the new
+path (a tab group asks the workspace for a layout update, which runs on the next
+microtask). All 87 checks pass, including the 5 installed-method ones.
+
+Small-window fix, 2026-11-15, test_vault, Obsidian 1.15.1, Windows. Reported
+problem: in a small window the tab strip filled up with the PopNote buttons,
+Pin and the opacity control overlapped, and no empty part of the strip was left
+to grab. A real mouse drag could shrink the window to 161 px wide, narrower than
+the window buttons alone. Changes: (1) a minimum window size of 300 x 160, set
+through `setMinimumSize` in `src/native.ts` (feature-detected, undone on
+release) and also applied to saved bounds; (2) the opacity slider opens as a
+popover under the tab strip, not inside it; (3) the empty part of the strip keeps
+at least 2 rem and is marked as a drag region; (4) below 32 rem the tab, "+" and
+tab-list buttons are hidden, because the note title is already in the view
+header. Checked on the running window: at 312, 360, 440 and 600 px Pin, the
+opacity value and the ⋯ button are readable and do not overlap; Pin made the
+window topmost and the slider changed native alpha (255 to 163) from inside the
+popover; a mouse drag below the minimum stopped at the minimum. Windows reported
+a drag (title bar) region in the strip at every width tested, 312 to 640 px. A
+simulated mouse drag on that region did not move the window, so dragging the
+window by the strip with a real mouse is not yet confirmed. Once, after a reload,
+the window reopened at a small size drawn as if it were wider (controls off the
+right edge); that came right after I had resized the window from outside
+Obsidian and did not recur after the minimum size was added.
 
 The three pinned packages resolved and the lockfile was reviewed. Dependency
 installation with scripts disabled and `npm run build` succeeded. The first
@@ -77,11 +120,14 @@ Electron and remote access must come from Obsidian, never an installed package.
 For a fresh checkout, run `npm ci --ignore-scripts`, then `npm run build`.
 Run the existing regression suite with `node --test tests/*.test.mjs` after the
 build. Installed-workspace tests read selected methods from an installed
-Obsidian 1.15.0 archive using host doubles; they never run the full application.
-On Windows the default is `%APPDATA%/obsidian/obsidian-1.15.0.asar`. Set
+Obsidian 1.15.1 archive using host doubles; they never run the full application.
+On Windows the default is `%APPDATA%/obsidian/obsidian-1.15.1.asar`. Set
 `POPNOTE_OBSIDIAN_ASAR` to that archive's location on other setups. The archive
-is not included in this repository. Automated passes do not establish GUI or
-cross-platform support.
+is not included in this repository. Obsidian renames its internal classes in
+every release, so after an Obsidian update these tests fail with a version or
+"class was renamed" message; the name table at the top of
+`tests/installed-workspace.test.mjs` then needs re-mapping. Automated passes do
+not establish GUI or cross-platform support.
 
 Use a disposable test vault only. Load the built `main.js`, `manifest.json`
 and `styles.css` from `<test-vault>/.obsidian/plugins/popnote/` by copying them
@@ -103,6 +149,13 @@ window at full opacity, so PopNote disabled the opacity control. Native
 readback alone does not establish visible stacking. Global shortcut delivery,
 pointer movement and resizing, and independent desktop sessions still need
 testing. Arch, Omarchy, Ubuntu and Debian remain unverified.
+
+On 2026-11-15 the three plugin files in the isolated Kali QA vault (under
+`/tmp/popnote-kali-runtime.*/qa/vault/.obsidian/plugins/popnote`, a temporary
+folder inside the Kali distribution) were replaced with the current build and
+their SHA-256 values matched the project folder. Its `data.json` was kept.
+Obsidian was not started there afterwards, so the Linux behavior of this build,
+including the small-window layout and the new minimum window size, is untested.
 
 ## GUI coverage and result record
 
@@ -277,7 +330,8 @@ Windows. A live Mac retest and recovery from an interrupted write remain open.
 
 For the next run, use a disposable vault with the candidate main.js from
 the project folder and its matching manifest.json and styles.css. The
-candidate main.js SHA-256 is 0b274ca0663d4e235959a6f8a061aa6533427535d2bf143f9975e7170b91e031.
+candidate main.js SHA-256 is fae411e1dff6415d8adb315287136e028b082ad71fa3e3fa4caddc94133a56e8
+(2026-11-15; it supersedes 4cb8eb45...5f31 and adds the small-window fix, whose files are main.js, styles.css and manifest.json with styles.css SHA-256 3d4135962b14978f4d0cf6f5d3f27f3141230e629c2cd9857b4c7f9fa101a397).
 Test a full quit and reopen after confirming all Obsidian processes exit.
 Capture the shortcut cleanup and registration events and the settings write
 and load events. Repeat the same-process restart as a separate run. Record
@@ -350,7 +404,8 @@ unmarked spike pop-outs manually before testing the new build.
 
 Run `npm run build`, then
 `node --test tests/*.test.mjs`.
-The installed-method checks read `obsidian-1.15.0.asar` locally, extract selected
+The installed-method checks read `obsidian-1.15.1.asar` locally (1.15.0 when this
+passage was written), extract selected
 methods in memory and execute them with host doubles. They never launch or
 modify Obsidian. `POPNOTE_OBSIDIAN_ASAR` can select another local archive, but
 a changed version requires review. All 40 focused checks passed again on

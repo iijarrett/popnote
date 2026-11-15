@@ -24,6 +24,7 @@ function host(pinFallbackLevel) {
     show() { this.visible = true; }, hide() { this.visible = false; }, restore() {}, focus() {},
     showInactive() { this.visible = true; },
     getNormalBounds() { return { ...this.bounds }; }, setBounds(value) { this.bounds = { ...this.bounds, ...value }; },
+    min: [0, 0], getMinimumSize() { return [...this.min]; }, setMinimumSize(width, height) { this.min = [width, height]; },
     on(name, callback) { listeners.set(name, callback); }, removeListener(name) { listeners.delete(name); },
   };
   const unrelated = { id: 1, alpha: 0.9, pinned: true, getTitle: () => "main" };
@@ -51,6 +52,22 @@ test("release restores only applied values on the originally bound window", () =
   assert.equal(h.original.alpha, 1); assert.equal(h.original.pinned, false); assert.equal(h.original.spaces, false);
   assert.deepEqual(h.original.bounds, { x: 10, y: 20, width: 400, height: 300 });
   assert.equal(h.unrelated.alpha, 0.9); assert.equal(h.unrelated.pinned, true);
+});
+
+test("a minimum window size is applied, small saved bounds are raised to it, and release undoes it", () => {
+  const h = host(); h.bind(); h.native.minimumSize();
+  assert.deepEqual(h.original.min, [300, 160]);
+  h.native.restoreBounds({ x: 80, y: 90, width: 120, height: 50 });
+  assert.equal(h.original.bounds.width, 300); assert.equal(h.original.bounds.height, 160);
+  h.native.release();
+  assert.deepEqual(h.original.min, [0, 0]); assert.deepEqual(h.unrelated.min, undefined);
+  assert.deepEqual(h.notices, []);
+});
+
+test("a missing minimum-size API disables only that feature", () => {
+  const h = host(); delete h.original.setMinimumSize; h.bind(); h.native.minimumSize();
+  assert.ok(h.notices.some(message => message.includes("Minimum window size")));
+  assert.equal(h.native.pin(true), true); h.native.release(); assert.equal(h.original.pinned, false);
 });
 
 test("release preserves later external changes rather than overwriting them", () => {

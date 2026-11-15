@@ -314,6 +314,7 @@ export default class PopNotePlugin extends Plugin {
       this.stopWatchingBounds?.();
       this.stopWatchingBounds = undefined;
       if (!this.native.bind(document, allowed)) return;
+      this.native.minimumSize();
       if (this.bounds) this.native.restoreBounds(this.bounds);
       this.trace("restore-request", { windowBounds: this.bounds, opacity: this.opacity });
       this.stopWatchingBounds = this.native.watchBounds((bounds) => {
@@ -361,7 +362,7 @@ class PopNoteSettings extends PluginSettingTab {
   display(): void {
     this.containerEl.empty();
     this.containerEl.createEl("p", {
-      text: "Open a note and run \"PopNote: Use current note\" to choose what PopNote shows. The note, shortcut, size, position and opacity are remembered. \"PopNote: Show controls\" can be given a hotkey in Settings > Hotkeys. A refused shortcut keeps the previous one.",
+      text: "Open a note and run \"PopNote: Use current note\" to choose what PopNote shows. The note, shortcut, size, position and opacity are remembered. \"PopNote: Show controls\" can be given a hotkey in Settings > Hotkeys. A refused shortcut keeps the previous one. Write shortcuts without spaces, such as Ctrl+Alt+P. Use Super for the Windows key (Super+Q); on a Mac use Command, for example Command+Option+P. Spellings such as \"Win + Q\" can fail.",
     });
     let accelerator = this.plugin.currentShortcut();
     new Setting(this.containerEl).setName("Global shortcut")
