@@ -98,7 +98,7 @@ recorded below. Disable/re-enable after release and full restart with released
 content passed on 2026-11-07. Those results apply to the earlier build. The
 latest Windows smoke test below includes native pin-state readback, with
 pointer dragging, border resizing, and the listed regression checks still
-pending. PopNote 0.0.1 is a development preview.
+pending. PopNote 0.0.2 is a development preview.
 The Windows test-vault junction now points from
 `<test-vault>\.obsidian\plugins\popnote` to this
 project. `manifest.json`, `main.js` and `styles.css` were verified through the
@@ -154,8 +154,18 @@ On 2026-11-15 the three plugin files in the isolated Kali QA vault (under
 `/tmp/popnote-kali-runtime.*/qa/vault/.obsidian/plugins/popnote`, a temporary
 folder inside the Kali distribution) were replaced with the current build and
 their SHA-256 values matched the project folder. Its `data.json` was kept.
-Obsidian was not started there afterwards, so the Linux behavior of this build,
-including the small-window layout and the new minimum window size, is untested.
+Later the same day Obsidian 1.15.0 (Linux x86_64, WSLg, XWayland, GPU disabled,
+unprivileged test user, no network) was started from that folder and driven through
+its command line. The build loaded, and the pop-out opened with the controls expanded.
+With the window resized from code to 700, 500, 400, 330 and 300 px, Pin, the opacity
+value and the controls button never overlapped, all stayed inside the window, and the
+empty strip kept 120, 206, 106, 52 and 32 px. A request for 200 px was held at 300
+(minimum size 300 x 160 as set). Pin set and cleared always-on-top, and two toggles hid
+and showed the same native window ID. Opacity stayed disabled, as in the earlier Kali
+run, because this display does not apply window opacity. This was read from the page
+layout and Electron window state, not from screenshots, and only on this one
+WSLg/XWayland setup; pointer dragging, real desktop sessions and other distributions
+and Wayland-native sessions are still untested.
 
 ## GUI coverage and result record
 
