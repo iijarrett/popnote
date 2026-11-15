@@ -31,7 +31,7 @@ type NativeWindow = {
   isVisibleOnAllWorkspaces(): boolean;
 };
 
-export class SpikeNative {
+export class PopNoteNative {
   private remote: any = null;
   private window: NativeWindow | null = null;
   private canControl?: () => boolean;
@@ -125,7 +125,7 @@ export class SpikeNative {
       const windows = this.remote.BrowserWindow;
       this.method(windows, "getAllWindows");
       const originalTitle = document.title;
-      const marker = `popnote-spike-${globalThis.crypto.randomUUID()}`;
+      const marker = `popnote-window-${globalThis.crypto.randomUUID()}`;
       let matched: NativeWindow[];
       try {
         document.title = marker;
@@ -339,12 +339,20 @@ export class SpikeNative {
     });
   }
 
-  registerShortcut(accelerator: string, callback: () => void): boolean {
+  /**
+   * `reclaim` is for PopNote's own startup shortcut: after a reload or a replaced renderer,
+   * Electron may still hold the old registration with a dead callback, so release it first.
+   */
+  registerShortcut(accelerator: string, callback: () => void, reclaim = false): boolean {
     if (accelerator === this.accelerator) return true;
     return this.attempt("Global shortcut", () => {
       const shortcuts = this.remote.globalShortcut;
       this.method(shortcuts, "register");
       this.method(shortcuts, "unregister");
+      if (reclaim && typeof shortcuts.isRegistered === "function" && shortcuts.isRegistered(accelerator)) {
+        shortcuts.unregister(accelerator);
+        this.trace("shortcut-reclaimed", { accelerator });
+      }
       const registered = shortcuts.register(accelerator, () => {
         if (this.accelerator !== accelerator) return;
         try {
@@ -363,7 +371,7 @@ export class SpikeNative {
         return false;
       }
       this.accelerator = accelerator;
-      new Notice(`PopNote: shortcut ${accelerator} registered. Test it from another app.`);
+      new Notice(`PopNote: shortcut ${accelerator} registered.`);
       return true;
     }) ?? false;
   }

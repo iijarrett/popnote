@@ -10,7 +10,7 @@ type TabGroup = WorkspaceParent & {
 };
 
 /** Tracks the tabs created by PopNote in one dedicated window. */
-export class SpikeWindow {
+export class PopNoteWindow {
   private leaf: WorkspaceLeaf | null = null;
   private document: Document | null = null;
   private container: WorkspaceWindow | null = null;
@@ -163,7 +163,7 @@ export class SpikeWindow {
     try {
       const leaf = workspace.createLeafInTabGroup(group);
       if (leaf.parent === group && leaf.getContainer() === container &&
-        (this.ownedLeaves.has(leaf) || (!existing.has(leaf) && this.compatibility.claim(leaf)))) {
+        (this.ownedLeaves.has(leaf) || (!existing.has(leaf) && (!this.claimed || this.compatibility.claim(leaf))))) {
         this.ownedLeaves.add(leaf);
         created = leaf;
       }
@@ -187,7 +187,7 @@ export class SpikeWindow {
     if (this.isOpen()) return this.document!;
     this.release("previous pop-out is unavailable");
     const workspace = this.app.workspace;
-    if (!this.compatibility.canOpen()) throw new Error("restart compatibility is unavailable or workspace is still loading");
+    if (!workspace.layoutReady) throw new Error("the workspace is still loading");
     if (typeof workspace.openPopoutLeaf !== "function") {
       throw new Error("Obsidian pop-out API is unavailable.");
     }
@@ -207,8 +207,10 @@ export class SpikeWindow {
     this.ownedLeaves.add(leaf);
     this.container = container;
     try {
-      if (!this.compatibility.claim(leaf)) throw new Error("owned leaf compatibility check failed");
-      this.claimed = true;
+      // Restart protection is a convenience. If it is unavailable the window still opens;
+      // it is then ordinary workspace content and may restore after a restart.
+      if (this.compatibility.claim(leaf)) this.claimed = true;
+      else this.trace("popout-unprotected", {});
       await leaf.openFile(file);
       if (this.leaf !== leaf) throw new Error("Pop-out was closed while opening.");
       const document = await this.waitForAttachment(leaf, container);

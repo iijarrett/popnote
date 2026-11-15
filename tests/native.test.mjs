@@ -38,7 +38,7 @@ function host(pinFallbackLevel) {
       Notice: class { constructor(message) { notices.push(message); } }, Platform: { isLinux: false },
     } : { remote },
   });
-  const native = new module.exports.SpikeNative(() => {}, undefined, pinFallbackLevel);
+  const native = new module.exports.PopNoteNative(() => {}, undefined, pinFallbackLevel);
   return { native, original, unrelated, document, notices, listeners,
     allow(value) { allowed = value; }, bind() { return native.bind(document, () => allowed); } };
 }

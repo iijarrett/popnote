@@ -12,7 +12,7 @@ const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(
 function host(initial = {}, options = {}) {
   let disk = structuredClone(initial);
   const writes = [], logs = [], notices = [], commands = new Map(), events = new Map();
-  const timers = new Map(), keys = new Map(), storage = options.storage ?? new Map();
+  const timers = new Map(), keys = options.keys ?? new Map(), storage = options.storage ?? new Map();
   const sliders = [], toggles = [], windows = [], opened = [], file = new TFile("notes/A.md");
   let timerId = 0, layoutReadyCallback, failSave = false, activeLeaf;
   const mainWindow = {
@@ -159,8 +159,9 @@ function host(initial = {}, options = {}) {
     process: { pid: 123 }, BrowserWindow: { getAllWindows: () => windows },
     screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 2000, height: 1200 } }) },
     globalShortcut: {
-      register: (key, callback) => { if (options.refuse?.(key)) return false; keys.set(key, callback); return true; },
+      register: (key, callback) => { if (options.refuse?.(key) || keys.has(key)) return false; keys.set(key, callback); return true; },
       unregister: key => keys.delete(key),
+      isRegistered: key => keys.has(key),
     },
   };
   const exports = {}, module = { exports };
@@ -170,7 +171,7 @@ function host(initial = {}, options = {}) {
       if (name === "obsidian") return {
         Plugin, PluginSettingTab: class {}, Setting, TFile, WorkspaceWindow, apiVersion: "1.15.0",
         Notice: class { constructor(message) { notices.push(message); } },
-        Platform: { isDesktop: options.desktop !== false, isMacOS: false, isLinux: false },
+        Platform: { isDesktop: options.desktop !== false, isMacOS: options.macOS === true, isLinux: false },
       };
       if (name === "electron") return { remote };
       throw Error(name);
@@ -208,7 +209,7 @@ function host(initial = {}, options = {}) {
     disk: () => disk, failNextSave: () => { failSave = true; },
     ready() { workspace.layoutReady = true; layoutReadyCallback?.(); },
     tick() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
-    event(name) { events.get(name)?.(); },
+    event(name, event = {}) { events.get(name)?.(event); },
   };
 }
 class TFile { constructor(path) { this.path = path; } }
@@ -240,14 +241,14 @@ test("startup registers the saved shortcut without creating a pop-out; summon re
 test("prepare and successful Apply survive restart; refused shortcuts never replace the saved shortcut", async () => {
   const h = host({}, { refuse: key => key === "Taken" });
   await h.plugin.onload();
-  h.commands.get("prepare-spike")(); h.plugin.applyShortcut("Control+Alt+Shift+P"); await settle();
+  h.commands.get("use-current-note")(); h.plugin.applyShortcut("Control+Alt+Shift+P"); await settle();
   assert.equal(h.disk().notePath, "notes/A.md");
   assert.equal(h.disk().shortcut, "Control+Alt+Shift+P");
   const count = h.writes.length;
   h.plugin.applyShortcut("Taken"); await settle();
   assert.equal(h.keys.has("Control+Alt+Shift+P"), true);
   assert.equal(h.writes.length, count);
-  h.commands.get("prepare-spike")(); await settle();
+  h.commands.get("use-current-note")(); await settle();
   assert.equal(h.disk().shortcut, "Control+Alt+Shift+P");
   const restarted = host(h.disk()); await restarted.plugin.onload();
   restarted.keys.get("Control+Alt+Shift+P")(); await settle();
@@ -279,7 +280,7 @@ test("opacity saves immediately and queued changes remain ordered through unload
 
 test("save errors are reported and do not poison later saves", async () => {
   const h = host(settings); await h.plugin.onload(); h.failNextSave();
-  h.commands.get("prepare-spike")(); await settle();
+  h.commands.get("use-current-note")(); await settle();
   assert.ok(h.notices.some(value => value.includes("could not be saved")));
   h.plugin.applyShortcut("Control+Alt+O"); await settle();
   assert.equal(h.disk().shortcut, "Control+Alt+O");
@@ -287,10 +288,10 @@ test("save errors are reported and do not poison later saves", async () => {
 
 test("restart diagnostics survive a new instance and include lifecycle and save completion", async () => {
   const storage = new Map(); const h = host(settings, { storage });
-  await h.plugin.onload(); h.ready(); h.commands.get("prepare-spike")(); await settle();
+  await h.plugin.onload(); h.ready(); h.commands.get("use-current-note")(); await settle();
   h.plugin.onunload(); await settle();
   const restarted = host(h.disk(), { storage }); await restarted.plugin.onload(); restarted.ready();
-  const history = storage.get("popnote-spike-restart-trace:test_vault") ?? "";
+  const history = storage.get("popnote-restart-trace:test_vault") ?? "";
   for (const event of ["plugin-load", "layout-ready", "save-complete", "plugin-unload"])
     assert.ok(history.includes(event), `missing ${event}`);
   assert.ok(restarted.logs.some(line => line.includes("settings-loaded") && line.includes("0.6")));
@@ -308,7 +309,7 @@ test("malformed settings and mobile remain safe", async () => {
 
 test("a refused first custom shortcut is not saved by a later note write", async () => {
   const h = host({}, { refuse: key => key === "Taken" }); await h.plugin.onload();
-  h.plugin.applyShortcut("Taken"); h.commands.get("prepare-spike")(); await settle();
+  h.plugin.applyShortcut("Taken"); h.commands.get("use-current-note")(); await settle();
   assert.equal(h.disk().shortcut, undefined);
   const restarted = host(h.disk()); await restarted.plugin.onload();
   assert.ok(restarted.keys.has("Control+Alt+P"));
@@ -341,6 +342,82 @@ test("beforeunload flushes pending bounds and records the pending write", async 
   assert.ok(h.logs.some(line => line.includes('"event":"main-beforeunload"') && line.includes('"boundsSaveScheduled":true')));
   assert.ok(h.logs.some(line => line.includes('"event":"save-complete"') && line.includes('"reason":"bounds"')));
 });
+
+test("renderer shutdown releases only its own shortcut across repeated Mac restarts", async () => {
+  const accelerator = "Command+Option+P";
+  const foreign = () => {};
+  const keys = new Map([["Command+Option+O", foreign]]);
+  for (let run = 0; run < 3; run++) {
+    const h = host({ ...settings, shortcut: accelerator }, { keys, macOS: true });
+    await h.plugin.onload();
+    assert.equal(h.windows.length, 0);
+    assert.ok(keys.has(accelerator));
+    h.plugin.applyShortcut("Command+Option+O");
+    assert.equal(keys.get("Command+Option+O"), foreign);
+    h.event("beforeunload", { defaultPrevented: true });
+    assert.ok(keys.has(accelerator));
+    h.event(run === 1 ? "pagehide" : "beforeunload");
+    assert.equal(keys.has(accelerator), false);
+    assert.equal(keys.get("Command+Option+O"), foreign);
+  }
+});
+
+test("a stale startup registration is reclaimed, but Apply never takes a foreign shortcut", async () => {
+  const stale = () => {};
+  const keys = new Map([["Command+Option+P", stale], ["Command+Option+O", stale]]);
+  const h = host({ ...settings, shortcut: "Command+Option+P" }, { keys, macOS: true });
+  await h.plugin.onload();
+  assert.notEqual(keys.get("Command+Option+P"), stale);
+  assert.ok(h.logs.some(line => line.includes('"event":"shortcut-reclaimed"')));
+  h.plugin.applyShortcut("Command+Option+O");
+  assert.equal(keys.get("Command+Option+O"), stale);
+  keys.get("Command+Option+P")(); await settle();
+  assert.equal(h.windows.length, 1);
+});
+
+test("unchanged close bounds do not queue a second shutdown write", async () => {
+  const h = host(settings);
+  await h.plugin.onload();
+  h.keys.get(settings.shortcut)();
+  await settle();
+  const window = h.windows[0];
+  window.bounds = { x: 200, y: 210, width: 550, height: 460 };
+  window.emit("move");
+  h.event("beforeunload");
+  await settle();
+  window.emit("close");
+  h.tick();
+  await settle();
+  assert.equal(h.writes.length, 1);
+  assert.deepEqual(h.disk().windowBounds, window.bounds);
+});
+
+
+test("Obsidian quit waits for a changed bounds save already in flight", async () => {
+  let finishSave;
+  const gate = new Promise(resolve => { finishSave = resolve; });
+  const h = host(settings, { saveGate: () => gate });
+  await h.plugin.onload();
+  h.keys.get(settings.shortcut)();
+  await settle();
+  const window = h.windows[0];
+  window.bounds = { x: 200, y: 210, width: 550, height: 460 };
+  window.emit("move");
+  h.tick();
+  await settle();
+  const tasks = [];
+  h.event("quit", { addPromise: promise => tasks.push(promise) });
+  window.emit("close");
+  h.tick();
+  await settle();
+  assert.equal(tasks.length, 1);
+  assert.deepEqual(h.disk().windowBounds, settings.windowBounds);
+  finishSave();
+  await Promise.all(tasks);
+  assert.deepEqual(h.disk().windowBounds, window.bounds);
+  assert.equal(h.writes.length, 1);
+});
+
 
 test("diagnostic storage failure does not block saving or summoning", async () => {
   const storage = { get() { throw Error("storage blocked"); }, set() { throw Error("storage blocked"); } };

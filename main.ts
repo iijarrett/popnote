@@ -1,13 +1,13 @@
 import { Notice, Platform, Plugin, PluginSettingTab, Setting, TFile, apiVersion } from "obsidian";
 import { RestartTrace } from "./src/diagnostics";
-import { SpikeNative, type WindowBounds } from "./src/native";
+import { PopNoteNative, type WindowBounds } from "./src/native";
 import { OverlayControls } from "./src/overlay";
-import { SpikeWindow } from "./src/window";
+import { PopNoteWindow } from "./src/window";
 import { WorkspaceCompatibility } from "./src/workspace-compat";
 
-export default class PopNoteSpike extends Plugin {
-  private native: SpikeNative | null = null;
-  private popout: SpikeWindow | null = null;
+export default class PopNotePlugin extends Plugin {
+  private native: PopNoteNative | null = null;
+  private popout: PopNoteWindow | null = null;
   private notePath: string | null = null;
   private overlay?: OverlayControls;
   private busy = false;
@@ -48,10 +48,10 @@ export default class PopNoteSpike extends Plugin {
     await this.loadWindowSettings();
     if (this.stopped) return;
     this.allSpaces = defaults.allSpaces;
-    this.popout = new SpikeWindow(this.app, this.compatibility, (event, details) => this.trace(event, details),
+    this.popout = new PopNoteWindow(this.app, this.compatibility, (event, details) => this.trace(event, details),
       (reason) => this.releaseWindowBinding(reason));
-    this.native = new SpikeNative((message) => {
-      console.info(`[PopNote spike] ${message}`);
+    this.native = new PopNoteNative((message) => {
+      console.info(`[PopNote] ${message}`);
       this.trace("native-action", { message });
     }, (event, details) => this.trace(event, details), defaults.pinFallbackLevel);
     this.registerEvent(this.app.workspace.on("window-open", () => this.traceLayout("workspace-window-open")));
@@ -68,35 +68,44 @@ export default class PopNoteSpike extends Plugin {
         this.traceLayout("layout-ready");
       }
     });
-    if (mainWindow) this.registerDomEvent(mainWindow, "beforeunload", () => {
-      this.trace("main-beforeunload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined });
-      this.flushWindowSave();
-    });
+    this.registerEvent(this.app.workspace.on("quit", (tasks) => {
+      this.flushShutdownBounds();
+      if (this.pendingSaves > 0) tasks.addPromise(this.saveQueue);
+    }));
+    if (mainWindow) {
+      this.registerDomEvent(mainWindow, "beforeunload", (event) => {
+        this.trace("main-beforeunload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined });
+        if (!event.defaultPrevented) this.finishRendererShutdown("beforeunload");
+      });
+      this.registerDomEvent(mainWindow, "pagehide", (event) => {
+        if (!event.persisted) this.finishRendererShutdown("pagehide");
+      });
+    }
     this.traceLayout("startup-snapshot");
     this.addCommand({
-      id: "prepare-spike",
-      name: "Prepare spike from current note",
+      id: "use-current-note",
+      name: "Use current note",
       callback: () => {
         if (this.popout?.isOpen()) {
-          new Notice("PopNote: close the spike pop-out before choosing another test note.");
+          new Notice("PopNote: close the PopNote window before choosing another note.");
           return;
         }
         const file = this.app.workspace.getActiveFile();
         if (!file) {
-          new Notice("PopNote: open a disposable note in the test vault first.");
+          new Notice("PopNote: open a note first.");
           return;
         }
         this.notePath = file.path;
         this.trace("note-prepared", { notePath: this.notePath });
         this.queueSave("note");
         new Notice(this.shortcutActive
-          ? `PopNote: prepared ${file.path}. Minimize Obsidian, then press ${this.shortcut}.`
-          : `PopNote: prepared ${file.path}. No shortcut registered; apply one in settings or use Toggle spike pop-out.`);
+          ? `PopNote: showing ${file.path}. Press ${this.shortcut} to open it.`
+          : `PopNote: showing ${file.path}. No shortcut is registered; set one in settings or run "PopNote: Toggle window".`);
       },
     });
     this.addCommand({
-      id: "toggle-spike",
-      name: "Toggle spike pop-out",
+      id: "toggle",
+      name: "Toggle window",
       callback: () => { void this.toggle("command"); },
     });
     this.addCommand({
@@ -104,7 +113,7 @@ export default class PopNoteSpike extends Plugin {
       name: "Show controls",
       callback: () => { this.overlay?.recover(true); },
     });
-    this.addSettingTab(new SpikeSettings(this));
+    this.addSettingTab(new PopNoteSettings(this));
     this.applyShortcut(this.shortcut, false);
   }
 
@@ -171,6 +180,21 @@ export default class PopNoteSpike extends Plugin {
     this.queueSave("bounds");
   }
 
+  private flushShutdownBounds(): void {
+    this.stopWatchingBounds?.();
+    this.stopWatchingBounds = undefined;
+    this.flushWindowSave();
+  }
+
+  private finishRendererShutdown(source: "beforeunload" | "pagehide"): void {
+    this.flushShutdownBounds();
+    if (!this.shortcutActive || !this.native) return;
+    // Obsidian can replace the renderer without calling the plugin's unload hook.
+    const released = this.native.unregisterShortcut();
+    if (released) this.shortcutActive = false;
+    this.trace("shortcut-cleanup", { released, source });
+  }
+
   private queueSave(reason: string): void {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
@@ -204,7 +228,7 @@ export default class PopNoteSpike extends Plugin {
       new Notice("PopNote: enter a shortcut first.");
       return;
     }
-    const registered = this.native?.registerShortcut(accelerator, () => { void this.toggle("shortcut"); }) ?? false;
+    const registered = this.native?.registerShortcut(accelerator, () => { void this.toggle("shortcut"); }, !persist) ?? false;
     this.trace("shortcut-registration", { accelerator, success: registered, source: persist ? "apply" : "startup" });
     if (registered) {
       this.shortcutActive = true;
@@ -257,8 +281,8 @@ export default class PopNoteSpike extends Plugin {
       if (!(file instanceof TFile)) {
         this.trace("summon-note-unavailable", { notePath: this.notePath });
         new Notice(this.notePath
-          ? `PopNote: saved note ${this.notePath} is unavailable. Prepare a test note again.`
-          : "PopNote: run Prepare spike from current note first.");
+          ? `PopNote: saved note ${this.notePath} is unavailable. Open another note and run "PopNote: Use current note".`
+          : 'PopNote: no note chosen yet. Open a note and run "PopNote: Use current note".');
         return;
       }
       this.trace("popout-create-request", { source, notePath: file.path });
@@ -306,7 +330,7 @@ export default class PopNoteSpike extends Plugin {
       // Creation already shows the public pop-out; do not toggle it back to hidden.
     } catch (error) {
       this.trace("summon-failed", { message: error instanceof Error ? error.message : String(error) });
-      new Notice(`PopNote: spike could not open: ${error instanceof Error ? error.message : String(error)}`);
+      new Notice(`PopNote: could not open: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (this.operation === operation) this.busy = false;
     }
@@ -315,8 +339,7 @@ export default class PopNoteSpike extends Plugin {
   onunload(): void {
     this.trace("plugin-unload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined, ownedPopoutOpen: this.popout?.isOpen() ?? false });
     this.stopped = true;
-    this.stopWatchingBounds?.();
-    this.flushWindowSave();
+    this.flushShutdownBounds();
     this.native?.dispose();
     this.trace("owned-popout-close-request");
     this.popout?.close();
@@ -327,24 +350,24 @@ export default class PopNoteSpike extends Plugin {
   }
 }
 
-class SpikeSettings extends PluginSettingTab {
-  private spike: PopNoteSpike;
+class PopNoteSettings extends PluginSettingTab {
+  private plugin: PopNotePlugin;
 
-  constructor(spike: PopNoteSpike) {
-    super(spike.app, spike);
-    this.spike = spike;
+  constructor(plugin: PopNotePlugin) {
+    super(plugin.app, plugin);
+    this.plugin = plugin;
   }
 
   display(): void {
     this.containerEl.empty();
     this.containerEl.createEl("p", {
-      text: "Prepare a note once. The note, successfully applied shortcut, size, position, and opacity are remembered. Show controls can be assigned a hotkey in Settings > Hotkeys; it does not change editor Tab behavior. Choose a combination available to Obsidian. A refused change keeps the previous shortcut. Restart diagnostics are kept locally and in the console.",
+      text: "Open a note and run \"PopNote: Use current note\" to choose what PopNote shows. The note, shortcut, size, position and opacity are remembered. \"PopNote: Show controls\" can be given a hotkey in Settings > Hotkeys. A refused shortcut keeps the previous one.",
     });
-    let accelerator = this.spike.currentShortcut();
-    new Setting(this.containerEl).setName("Global shortcut (spike)")
+    let accelerator = this.plugin.currentShortcut();
+    new Setting(this.containerEl).setName("Global shortcut")
       .addText((text) => text.setValue(accelerator).onChange((value) => { accelerator = value; }))
       .addButton((button) => button.setButtonText("Apply").onClick(() => {
-        this.spike.applyShortcut(accelerator);
+        this.plugin.applyShortcut(accelerator);
       }));
   }
 }

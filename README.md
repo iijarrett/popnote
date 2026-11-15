@@ -4,8 +4,8 @@ PopNote gives an Obsidian note its own floating desktop window. Use a global
 shortcut to show or hide it, pin it above other apps, and adjust its opacity.
 
 This is a development preview. It requires Obsidian 1.15.0 or newer.
-Windows and Kali WSLg have partial live validation on 1.15.0. macOS and
-other Linux desktops still need live checks.
+Windows, macOS ARM64, and Kali WSLg have partial validation on Obsidian 1.15.0.
+A macOS restart and shortcut registration issue remains open.
 
 ## Install from GitHub
 
@@ -16,14 +16,13 @@ other Linux desktops still need live checks.
 3. Enable **PopNote** in **Settings → Community plugins** and follow the
    note and shortcut steps below.
 
-## Try the development build
+## Open your first PopNote
 
-1. Follow [Build](#build) and load the plugin in a disposable vault.
-2. Enable **PopNote** under **Settings → Community plugins**.
-3. Open a note and run **PopNote: Prepare spike from current note** once.
-4. On Windows, press **Ctrl+Alt+P** to summon or hide the pop-out. Use the
-   **⋯** button to toggle Pin and the opacity control. Select the displayed
-   percentage to adjust opacity in 1% steps.
+1. In the disposable vault, open a note and run **PopNote: Use current note** once.
+2. Press **Ctrl+Alt+P** on Windows or **Command+Option+P** on macOS to summon
+   or hide the pop-out. If the shortcut is unavailable, use **PopNote: Toggle window** from the command palette.
+3. Open **⋯** to reveal Pin and the opacity control. Select the displayed
+   percentage to adjust opacity in 1% steps on supported desktops.
 
 ## Current state
 
@@ -35,6 +34,16 @@ dedicated window at its saved 70% opacity. On a full restart with two PopNote
 tabs open, the ordinary pop-out restored and PopNote stayed closed until the
 shortcut summoned it. The scoped results and remaining checks are below.
 
+The commands are now **PopNote: Use current note** (`popnote:use-current-note`) and
+**PopNote: Toggle window** (`popnote:toggle`). Results recorded below before
+2026-11-15 used their old names, "Prepare spike from current note" and "Toggle
+spike pop-out"; hotkeys assigned to the old IDs must be set again. Restart
+protection is now optional: if it is unavailable PopNote still opens, with a
+Notice, and the window may restore after a restart. At startup PopNote also
+releases a stale registration of its own saved shortcut before registering it.
+The build and all 87 automated checks pass; none of this has been checked in a
+live GUI yet.
+
 The three pinned packages resolved and the lockfile was reviewed. Dependency
 installation with scripts disabled and `npm run build` succeeded. The first
 sandboxed build was blocked by `spawn EPERM`; the approved retry outside the
@@ -43,12 +52,10 @@ The exclusive-window guard was built on 2026-11-06: `npm run build` and all
 64 automated tests passed. Owner GUI checks now pass mixed-tab release and
 movement into the main window and another ordinary pop-out, within the limits
 recorded below. Disable/re-enable after release and full restart with released
-content passed on 2026-11-07. Native pinning and the remaining validation checks
-are still pending. The earlier controlled restart observations apply to the
-preceding build.
-Windows GUI validation is partial: the owner reported the controlled Obsidian
-1.15.0 restart and disable/re-enable results below on 2026-11-06. Other GUI
-checks remain pending. Do not use a real vault. This remains a spike, not v0.1.
+content passed on 2026-11-07. Those results apply to the earlier build. The
+latest Windows smoke test below includes native pin-state readback, with
+pointer dragging, border resizing, and the listed regression checks still
+pending. PopNote 0.0.1 is a development preview.
 The Windows test-vault junction now points from
 `<test-vault>\.obsidian\plugins\popnote` to this
 project. `manifest.json`, `main.js` and `styles.css` were verified through the
@@ -107,7 +114,7 @@ package. A build pass is not a GUI pass.
 | Order | Target | Architecture | GUI status |
 |---|---|---|---|
 | 1 | Windows | Not recorded for reported run | Partial: Obsidian 1.15.0, test_vault; see controlled results below |
-| 2 | macOS | ARM64 | Pending (unverified; machine availability to confirm) |
+| 2 | macOS | ARM64 | Partial on Obsidian 1.15.0. Same-process shortcut registration failed after restart. Desktop input and full process restart are unverified. |
 | 2 | macOS | x64 | Pending (unverified; machine availability to confirm) |
 | 3 | Linux X11 | x64 | Pending (unverified; as machine/package available) |
 | 3 | Linux X11 | ARM64 | Pending (unverified; as machine/package available) |
@@ -144,8 +151,7 @@ the ownership follow-up; do not repeat the older slider sweep unless approved.
 
 1. Open only `<test-vault>`. Enable PopNote under
    Settings -> Community plugins. Expect a shortcut registration notice.
-2. Create and open a disposable note. Run **PopNote: Prepare spike from current
-   note** from the command palette. This captures the note without opening a
+2. Create and open a disposable note. Run **PopNote: Use current note** from the command palette. This captures the note without opening a
    pop-out. This is only needed for initial selection or changing the saved test
    note; the note and window settings persist. There is no note picker yet.
 3. Minimize Obsidian before the first summon. From another app press
@@ -156,7 +162,7 @@ the ownership follow-up; do not repeat the older slider sweep unless approved.
    expect it to return with the same ID. With pin off, focus another app and
    press again: expect PopNote to focus instead of hiding. Also minimize the
    pop-out and summon it; expect the same ID. Never restore the main window.
-5. Turn **Pin (spike)** on and click another app: expect PopNote to remain above
+5. Turn **Pin** on and click another app: expect PopNote to remain above
    it. Turn pin off: expect ordinary stacking. This differs from desktop pinning.
 6. Deferred opacity sweep: 100%, 60%, 30%, then back to 100%, checking that the
    whole window and text fade. Do not run this during the current ownership
@@ -226,21 +232,58 @@ Win+Q, separate focus/always-on-top checks, geometry changes and off-screen
 recovery retain their existing unverified status where no result is recorded.
 
 The current diagnostic is visible in the pop-out. Every creation and toggle
-also writes a notice and `[PopNote spike]` line in the developer console
+also writes a notice and `[PopNote]` line in the developer console
 (Ctrl+Shift+I on Windows). Record both IDs, action, shortcut, Obsidian version
 and OS version. If native lookup fails, the public pop-out remains available
-via **PopNote: Toggle spike pop-out**; native features must not target the main
+via **PopNote: Toggle window**; native features must not target the main
 window. An API failure disables the affected feature for this plugin session.
 
-## macOS follow-up - second (pending)
+## macOS ARM64 results and remaining checks
 
-Use a separate Mac test vault with the same built files, never a real vault.
-Repeat the Windows tests with **Command+Option+P**, skipping Win+Q and Task View.
-The only OS differences are defaults: the shortcut and enabling all Spaces.
-All Spaces is attempted once per created window. Test switching Spaces while
-visible and hidden, full-screen Spaces separately, and any Dock/window flicker.
-Repeat native ID reuse/replacement, pin, opacity, minimized main-window behavior
-and plugin-disable cleanup. Record limitations; none of this is GUI-verified.
+Reported on 2026-11-12 for PopNote 0.0.1, macOS 27.2.1 (26B131), ARM64, and
+Obsidian 1.15.0. A scratch build matched the supplied main.js byte for byte.
+All 81 regression checks passed. The reported vault comparison found all
+566 existing note, canvas, and base files at the same paths and with the
+same contents.
+
+- Obsidian registered Command+Option+P. The toggle command hid and showed
+  native window 4. Closing and summoning created window 5 with the saved note,
+  geometry, and 67% opacity.
+- Native readback confirmed pin and unpin, opacity at 60%, 30%, 100%, and 67%,
+  persistence after programmatic movement and resizing, and the all-Spaces flag.
+- Disabling PopNote closed its window and released the shortcut. Re-enabling
+  restored registration and settings with passive startup.
+- A same-process restart kept startup passive and restored settings, but
+  registration of Command+Option+P failed. A separate relaunch attempt also
+  stayed in the same process and left the settings file empty. The tester
+  restored the settings and cleared the stale registration. The final state was
+  enabled, with Command+Option+P registered and the PopNote window closed.
+- Desktop input and capture were unavailable. Physical shortcut delivery,
+  visible pinning and opacity, pointer dragging and resizing, ordinary and
+  full-screen Spaces, and Dock or window flicker remain unverified.
+
+A follow-up run reproduced the shortcut failure twice in a disposable vault
+with the same Obsidian main PID and a new renderer each time. The old renderer
+logged beforeunload without plugin-unload or shortcut-cleanup. Electron
+reported the shortcut was still registered. The toggle command restored the
+saved window in both runs. Both settings files stayed byte-identical despite
+a second shutdown write with no recorded completion.
+
+The candidate releases PopNote's own shortcut on renderer exit, stops the
+bounds watcher before flushing, and lets Obsidian wait for queued settings
+writes when its quit hook runs. The three new regressions failed against the
+original bundle. The candidate build and all 84 automated checks passed on
+Windows. A live Mac retest and recovery from an interrupted write remain open.
+
+For the next run, use a disposable vault with the candidate main.js from
+the project folder and its matching manifest.json and styles.css. The
+candidate main.js SHA-256 is 0b274ca0663d4e235959a6f8a061aa6533427535d2bf143f9975e7170b91e031.
+Test a full quit and reopen after confirming all Obsidian processes exit.
+Capture the shortcut cleanup and registration events and the settings write
+and load events. Repeat the same-process restart as a separate run. Record
+whether the pop-out stays closed at startup and the saved settings return on
+the first physical shortcut press. Test the remaining visual checks when
+desktop input and capture are available.
 
 ## Linux follow-up - after Windows and macOS (pending)
 
@@ -251,8 +294,7 @@ environment/compositor and exact Obsidian package using the record above. No
 Linux setup or community port has been GUI-verified.
 
 1. **Public pop-out first:** enable PopNote, open a disposable note and run
-   **PopNote: Prepare spike from current note**, then **PopNote: Toggle spike
-   pop-out** from Obsidian's command palette. Expect that note in a separate
+   **PopNote: Use current note**, then **PopNote: Toggle window** from Obsidian's command palette. Expect that note in a separate
    pop-out with the vault's theme and fonts. Record native lookup separately;
    unavailable native access must not prevent the public pop-out opening.
 2. **Global shortcut:** close the pop-out manually, minimize the main window
@@ -267,13 +309,13 @@ Linux setup or community port has been GUI-verified.
    If the shortcut is unavailable, manually restore Obsidian and use the
    palette toggle to test the focus request separately. Record focus behavior
    independently of shortcut support; never infer a pass from an API return.
-4. **Always-on-top:** turn **Pin (spike)** on, focus another app and observe
+4. **Always-on-top:** turn **Pin** on, focus another app and observe
    whether PopNote stays above it. Turn pin off and check normal stacking.
    Record ignored behavior, unavailable controls and Notices separately.
 5. **Opacity:** test 100%, 60%, 30%, then restore 100%. Expect the whole window
    and text to fade. Record actual behavior even if the API reports success.
 6. **Fallback after each unavailable native feature:** close the pop-out
-   manually, manually restore Obsidian and run **PopNote: Toggle spike pop-out**
+   manually, manually restore Obsidian and run **PopNote: Toggle window**
    in the command palette. Expect the prepared note to open again without
    requiring the unavailable native feature. Record fallback failure if it
    cannot open. Native lookup failure may leave pin/opacity controls absent.

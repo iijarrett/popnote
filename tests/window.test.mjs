@@ -43,15 +43,15 @@ function host(options = {}) {
     clearTimeout(id) { timers.delete(id); },
   });
   const leaves = [leaf];
-  const app = { workspace: { containerEl: { ownerDocument: mainDocument }, openPopoutLeaf: () => leaf,
+  const app = { workspace: { layoutReady: options.layoutReady ?? true, containerEl: { ownerDocument: mainDocument }, openPopoutLeaf: () => leaf,
     iterateAllLeaves: callback => leaves.forEach(callback) } };
   const compatibility = {
-    canOpen: () => true,
+    canOpen: () => options.claimFails !== true,
     claim(value) { assert.ok(leaves.includes(value)); claimed++; events.push("claim"); return options.claimFails !== true; },
     owns: () => claimed > released && options.claimFails !== true,
     release() { released++; return true; },
   };
-  const popout = new module.exports.SpikeWindow(app, compatibility, (event, details) => events.push({ event, details }), options.onRelease);
+  const popout = new module.exports.PopNoteWindow(app, compatibility, (event, details) => events.push({ event, details }), options.onRelease);
   let second;
   if (options.tabs) {
     const tabs = { children: [leaf], currentTab: 0 };
@@ -141,11 +141,21 @@ test("an attachment timeout detaches the failed owned leaf and removes observers
   assert.equal(h.observers.size, 0); assert.equal(h.timers.size, 0); assert.equal(h.listeners.size, 0);
 });
 
-test("failed note loading and failed ownership marking clean up the exact newly created leaf", async () => {
-  for (const options of [{ openFails: true }, { claimFails: true }]) {
-    const h = host(options); await assert.rejects(h.popout.open({}));
-    assert.equal(h.counts().detached, 1); assert.equal(h.popout.isOpen(), false);
-  }
+test("failed note loading cleans up the exact newly created leaf", async () => {
+  const h = host({ openFails: true }); await assert.rejects(h.popout.open({}));
+  assert.equal(h.counts().detached, 1); assert.equal(h.popout.isOpen(), false);
+});
+
+test("unavailable restart protection does not stop the window from opening", async () => {
+  const h = host({ claimFails: true, attached: true });
+  await h.popout.open({});
+  assert.equal(h.counts().detached, 0); assert.equal(h.popout.isOpen(), true);
+  assert.ok(h.events.some(entry => entry.event === "popout-unprotected"));
+});
+
+test("a workspace that is still loading refuses to open", async () => {
+  const h = host({ layoutReady: false });
+  await assert.rejects(h.popout.open({}), /still loading/);
 });
 
 test("unload during attachment cancels promptly and detaches only once", async () => {

@@ -14,7 +14,7 @@ export class RestartTrace {
     try {
       const storage = this.getStorage();
       if (!storage) throw new Error("local storage unavailable");
-      const key = `popnote-spike-restart-trace:${this.vault}`;
+      const key = `popnote-restart-trace:${this.vault}`;
       let history: unknown;
       try { history = JSON.parse(storage.getItem(key) ?? "[]"); } catch { history = []; }
       const lines = Array.isArray(history) ? history.filter((entry) => typeof entry === "string").slice(-199) : [];
