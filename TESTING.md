@@ -28,10 +28,13 @@ cursor in the note; the next click hid it and the one after showed it. Windows k
 Obsidian) in front when the icon is clicked.
 Switch note (opened the window on the chosen note and saved it) and Slider… (opened the slider with the slider focused) were then
 checked from the real right-click menu and passed.
+With another app in front (TextEdit), a real icon click and the shortcut both activated Obsidian and raised PopNote above that app's
+dialog with the cursor in the note. A later normal Quit (from the Obsidian menu, PopNote on in two vaults, tray on in one) exited in 2 s and
+stayed closed; on relaunch the shortcut was registered and a real press opened the window with the cursor in the note. The earlier
+hang did not recur, so its cause is still unknown (it followed a session of many live plugin reloads and a pending app update).
 Not tested: moving between several desktops (this Mac has one besides the
 full-screen one); the icon on a light menu bar; Intel Macs and other Macs; Obsidian 1.15.1. A normal Quit once left the
-Obsidian main process hanging for minutes (cause not found; it was force-quit and relaunched, and the shortcut worked
-afterwards), so a clean full quit and reopen is not confirmed. An extra ghost tray item appeared once after many
+Obsidian main process hanging for minutes (cause not found; see above for the clean quit that followed). An extra ghost tray item appeared once after many
 live reloads and went away; its source was not found, and the current build removes its icon cleanly on disable.
 
 Earlier full run of an older build (main.js c5ce6fa7...), 2026-11-16, branch mac-testing.
