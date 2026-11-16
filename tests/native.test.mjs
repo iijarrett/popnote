@@ -187,12 +187,3 @@ test("a missing full-screen API disables only that feature on macOS", () => {
   assert.ok(h.notices.some(message => message.includes("Full screen guard")));
   assert.equal(h.native.pin(true), true);
 });
-
-test("toggle reports what it did, so the caller can put the typing cursor in the note after a show", () => {
-  const h = host(); h.bind();
-  assert.equal(h.native.toggle(), "hidden"); assert.equal(h.original.visible, false);
-  assert.equal(h.native.toggle(), "shown"); assert.equal(h.original.visible, true);
-  h.original.isFocused = () => false;
-  assert.equal(h.native.toggle(), "focused");
-  assert.equal(h.native.toggle("hide-if-visible"), "hidden");
-});

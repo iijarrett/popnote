@@ -207,8 +207,8 @@ export class PopNoteNative {
    * "toggle": hide when focused, otherwise show or focus. "hide-if-visible" is for the tray icon, whose click takes focus
    * away, so a visible window must still hide. "show" never hides.
    */
-  toggle(mode: "toggle" | "hide-if-visible" | "show" = "toggle"): "shown" | "focused" | "hidden" | undefined {
-    return this.attempt("Window toggle", (): "shown" | "focused" | "hidden" | undefined => {
+  toggle(mode: "toggle" | "hide-if-visible" | "show" = "toggle"): void {
+    this.attempt("Window toggle", () => {
       const window = this.liveWindow();
       if (!window) return;
       for (const method of ["isMinimized", "isVisible", "isFocused", "show", "showInactive", "restore", "focus", "hide"]) {
@@ -216,7 +216,7 @@ export class PopNoteNative {
       }
       const visible = (value: boolean) => this.change("Window visibility", window, () => window.isVisible(),
         (before) => { if (before) window.showInactive(); else window.hide(); }, value);
-      let action: "shown" | "focused" | "hidden";
+      let action: string;
       if (window.isMinimized() || !window.isVisible()) {
         if (window.isMinimized()) {
           if (this.liveWindow() !== window) return;
@@ -234,7 +234,6 @@ export class PopNoteNative {
         action = "focused";
       }
       this.report(`Native window ID ${window.id}: ${action} (reused)`);
-      return action;
     });
   }
 

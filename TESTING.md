@@ -6,21 +6,20 @@ first section; older sections keep the names and behavior of the version they te
 ## Current state
 
 macOS run, 2026-11-16, branch mac-testing: Apple Silicon, Obsidian 1.15.0, disposable test vault, driven through the
-Obsidian command line plus real keyboard and mouse input. Build main.js d995f8d8... (c5ce6fa7... for the first pass).
-Passed: type check; 114 of 115 automated checks (the failing one, installed-workspace, needs the Obsidian 1.15.1
+Obsidian command line plus real keyboard and mouse input. Build main.js 1da33758... (c5ce6fa7... for the first pass).
+Passed: type check; 113 of 114 automated checks (the failing one, installed-workspace, needs the Obsidian 1.15.1
 archive, which is not installed here); scenario.js, tray.js and shortcut.js; shortcut registration after Reload app
 and after a full restart; the real shortcut (show, hide, show, same window); a real click on the menu-bar icon (open,
 then hide) and the right-click menu (Keep on top, Opacity 60, Find note with typing landing in the search box); a real
-drag of the strip (moved the window) and a real resize (stopped at 340 x 160); typing right after the shortcut and the
-icon show the window.
+drag of the strip (moved the window) and a real resize (stopped at 340 x 160).
 Changes made from this run: (1) summoned from a full-screen Space, the window became a 1728 x 1084 full-screen
 window; on macOS it is now not full-screenable (`keepOutOfFullScreen`), and it stays 340 x 160. It still does not
 float over a full-screen app: the shortcut switches to the PopNote desktop, because the Electron option that would
 do it also hides the Dock icon. (2) The menu-bar icon was nearly invisible on a dark bar: the macOS template flag
 does not survive the call into the main process, so a black glyph disappears. The macOS icon is now the notepad and
 pencil drawing with a white outline at 18 px, the height of the system icons. Windows and Linux icons are unchanged.
-(3) After hide and show, keyboard focus landed on the controls button, not the note; `toggle` now reports what it did
-and the caret is returned to the note (not when the picker or slider is open).
+A change that returned the typing cursor to the note on every show was tried, worked in the live check, and was removed at the owner's
+request; the window behaves as before (the cursor is in the note on first open).
 Not tested: Switch note and Slider from the real menu; moving between several desktops (this Mac has one besides the
 full-screen one); the icon on a light menu bar; Intel Macs and other Macs; Obsidian 1.15.1. A normal Quit once left the
 Obsidian main process hanging for minutes (cause not found; it was force-quit and relaunched, and the shortcut worked

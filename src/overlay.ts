@@ -305,9 +305,6 @@ export class OverlayControls {
     this.updateValues();
   }
 
-  /** True while the note picker or the opacity slider is open, so the window should not take focus away from it. */
-  hasOpenPanel(): boolean { return this.panelOpen || this.notesOpen; }
-
   recover(focus = false): void {
     if (!this.allowed()) return;
     this.rememberFocus(this.document.activeElement);
