@@ -32,8 +32,12 @@ With another app in front (TextEdit), a real icon click and the shortcut both ac
 dialog with the cursor in the note. A later normal Quit (from the Obsidian menu, PopNote on in two vaults, tray on in one) exited in 2 s and
 stayed closed; on relaunch the shortcut was registered and a real press opened the window with the cursor in the note. The earlier
 hang did not recur, so its cause is still unknown (it followed a session of many live plugin reloads and a pending app update).
-Not tested: moving between several desktops (this Mac has one besides the
-full-screen one); the icon on a light menu bar; Intel Macs and other Macs; Obsidian 1.15.1. A normal Quit once left the
+Later the same day, with two desktops and a light wallpaper: on a light menu bar the icon is clearly visible (dark drawing inside the
+white outline). With "Show on all desktops" on, a visible PopNote appears on the second desktop; a hidden one is shown on the desktop
+you press the shortcut on, focused with Obsidian in front; with TextEdit in front on that desktop the shortcut raised PopNote above
+it. Once, the first shortcut press on the second desktop (another app in front, window reported visible and unfocused) hid the
+window instead of raising it; it did not repeat in three further tries, so the cause is unknown.
+Not tested: Intel Macs and other Macs; Obsidian 1.15.1 running the app (the archive tests pass). A normal Quit once left the
 Obsidian main process hanging for minutes (cause not found; see above for the clean quit that followed). An extra ghost tray item appeared once after many
 live reloads and went away; its source was not found, and the current build removes its icon cleanly on disable.
 
