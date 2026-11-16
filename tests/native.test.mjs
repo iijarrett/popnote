@@ -41,7 +41,7 @@ function host(pinFallbackLevel, mac = false) {
     } : { remote },
   });
   const native = new module.exports.PopNoteNative(() => {}, undefined, pinFallbackLevel);
-  return { native, original, unrelated, document, notices, listeners,
+  return { native, original, unrelated, document, notices, listeners, remote,
     allow(value) { allowed = value; }, bind() { return native.bind(document, () => allowed); } };
 }
 
@@ -186,4 +186,25 @@ test("a missing full-screen API disables only that feature on macOS", () => {
   const h = host(undefined, true); delete h.original.setFullScreenable; h.bind(); h.native.keepOutOfFullScreen();
   assert.ok(h.notices.some(message => message.includes("Full screen guard")));
   assert.equal(h.native.pin(true), true);
+});
+
+test("toggle reports what it did, so the caller can put the typing cursor in the note after a show", () => {
+  const h = host(); h.bind();
+  assert.equal(h.native.toggle(), "hidden"); assert.equal(h.original.visible, false);
+  assert.equal(h.native.toggle(), "shown"); assert.equal(h.original.visible, true);
+  h.original.isFocused = () => false;
+  assert.equal(h.native.toggle(), "focused");
+  assert.equal(h.native.toggle("hide-if-visible"), "hidden");
+});
+
+test("on macOS a show or focus activates the app and raises the window; a failure there changes nothing", () => {
+  const h = host(undefined, true); h.bind();
+  let stolen = 0, raised = 0; h.remote.app = { focus: (options) => { if (options?.steal) stolen++; } };
+  h.original.moveTop = () => { raised++; };
+  h.original.visible = false; assert.equal(h.native.toggle(), "shown");
+  assert.deepEqual([stolen, raised], [1, 1]);
+  h.original.isFocused = () => false; assert.equal(h.native.toggle(), "focused");
+  assert.deepEqual([stolen, raised], [2, 2]);
+  h.remote.app = { focus() { throw new Error("no"); } }; h.original.moveTop = () => { throw new Error("no"); };
+  h.original.isFocused = () => false; assert.equal(h.native.toggle(), "focused"); assert.deepEqual(h.notices, []);
 });

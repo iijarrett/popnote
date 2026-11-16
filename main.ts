@@ -350,6 +350,16 @@ export default class PopNotePlugin extends Plugin {
     }
   }
 
+  /** Puts the typing cursor in the note after the window is shown. Obsidian moves focus just after a window comes up, so it is repeated once. */
+  private focusNote(): void {
+    const focus = () => {
+      if (this.stopped || !this.popout?.isOpen() || this.overlay?.hasOpenPanel()) return;
+      this.popout.focusEditor();
+    };
+    focus();
+    setTimeout(focus, 150);
+  }
+
   private async toggle(source: "command" | "shortcut" | "tray"): Promise<void> {
     if (this.stopped || !this.native || !this.popout) return;
     const open = this.popout.isOpen();
@@ -358,7 +368,10 @@ export default class PopNotePlugin extends Plugin {
     const operation = ++this.operation;
     try {
       if (open) {
-        this.native.toggle(source === "tray" ? "hide-if-visible" : "toggle");
+        // Windows: a tray click takes focus from the window, so a visible window must hide whatever its focus. On macOS the click
+        // does not, so hide only a focused window and raise one that is visible but behind other windows.
+        const action = this.native.toggle(source === "tray" && !Platform.isMacOS ? "hide-if-visible" : "toggle");
+        if (action === "shown" || action === "focused") this.focusNote();
         return;
       }
       const saved = this.notePath ? this.app.vault.getAbstractFileByPath(this.notePath) : null;

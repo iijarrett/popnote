@@ -6,8 +6,8 @@ first section; older sections keep the names and behavior of the version they te
 ## Current state
 
 macOS run, 2026-11-16, branch mac-testing: Apple Silicon, Obsidian 1.15.0, disposable test vault, driven through the
-Obsidian command line plus real keyboard and mouse input. Build main.js 1da33758... (c5ce6fa7... for the first pass).
-Passed: type check; 113 of 114 automated checks (the failing one, installed-workspace, needs the Obsidian 1.15.1
+Obsidian command line plus real keyboard and mouse input. Build main.js 1da33758... (d1dad69c... after the follow-up below) (c5ce6fa7... for the first pass).
+Passed: type check; 115 of 116 automated checks (113 of 114 before the follow-up) (the failing one, installed-workspace, needs the Obsidian 1.15.1
 archive, which is not installed here); scenario.js, tray.js and shortcut.js; shortcut registration after Reload app
 and after a full restart; the real shortcut (show, hide, show, same window); a real click on the menu-bar icon (open,
 then hide) and the right-click menu (Keep on top, Opacity 60, Find note with typing landing in the search box); a real
@@ -18,8 +18,14 @@ float over a full-screen app: the shortcut switches to the PopNote desktop, beca
 do it also hides the Dock icon. (2) The menu-bar icon was nearly invisible on a dark bar: the macOS template flag
 does not survive the call into the main process, so a black glyph disappears. The macOS icon is now the notepad and
 pencil drawing with a white outline at 18 px, the height of the system icons. Windows and Linux icons are unchanged.
-A change that returned the typing cursor to the note on every show was tried, worked in the live check, and was removed at the owner's
-request; the window behaves as before (the cursor is in the note on first open).
+Follow-up, same day: (3) After hide and show, keyboard focus landed on the three-dots button and its focus ring lit up. Every show
+from the shortcut or the icon now puts the typing cursor back in the note (not while the note picker or slider is open), and the
+button shows a focus ring only for real keyboard use (Tab or the Show controls command). Checked with real shortcut presses: five
+open/hide/show cycles left the cursor in the note with no ring. (4) On macOS a click on the menu-bar icon hid a window that was
+visible but behind another window; now it hides only a focused window and otherwise raises it, activates the app and focuses the
+note. Checked live: with the main Obsidian window in front of PopNote, a real icon click brought PopNote to the front with the
+cursor in the note; the next click hid it and the one after showed it. Windows keeps hide-if-visible. Not tested: another app (not
+Obsidian) in front when the icon is clicked.
 Not tested: Switch note and Slider from the real menu; moving between several desktops (this Mac has one besides the
 full-screen one); the icon on a light menu bar; Intel Macs and other Macs; Obsidian 1.15.1. A normal Quit once left the
 Obsidian main process hanging for minutes (cause not found; it was force-quit and relaunched, and the shortcut worked

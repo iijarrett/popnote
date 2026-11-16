@@ -207,8 +207,8 @@ export class PopNoteNative {
    * "toggle": hide when focused, otherwise show or focus. "hide-if-visible" is for the tray icon, whose click takes focus
    * away, so a visible window must still hide. "show" never hides.
    */
-  toggle(mode: "toggle" | "hide-if-visible" | "show" = "toggle"): void {
-    this.attempt("Window toggle", () => {
+  toggle(mode: "toggle" | "hide-if-visible" | "show" = "toggle"): "shown" | "focused" | "hidden" | undefined {
+    return this.attempt("Window toggle", (): "shown" | "focused" | "hidden" | undefined => {
       const window = this.liveWindow();
       if (!window) return;
       for (const method of ["isMinimized", "isVisible", "isFocused", "show", "showInactive", "restore", "focus", "hide"]) {
@@ -216,7 +216,7 @@ export class PopNoteNative {
       }
       const visible = (value: boolean) => this.change("Window visibility", window, () => window.isVisible(),
         (before) => { if (before) window.showInactive(); else window.hide(); }, value);
-      let action: string;
+      let action: "shown" | "focused" | "hidden";
       if (window.isMinimized() || !window.isVisible()) {
         if (window.isMinimized()) {
           if (this.liveWindow() !== window) return;
@@ -224,6 +224,7 @@ export class PopNoteNative {
         }
         if (!visible(true) || this.liveWindow() !== window) return;
         window.focus();
+        this.bringForward(window);
         action = "shown";
       } else if (mode === "hide-if-visible" || (mode === "toggle" && window.isFocused())) {
         if (!visible(false)) return;
@@ -231,10 +232,22 @@ export class PopNoteNative {
       } else {
         if (!visible(true) || this.liveWindow() !== window) return;
         window.focus();
+        this.bringForward(window);
         action = "focused";
       }
       this.report(`Native window ID ${window.id}: ${action} (reused)`);
+      return action;
     });
+  }
+
+  /**
+   * macOS: a click on the menu-bar icon or a global shortcut does not make Obsidian the active app, so a shown window can stay
+   * behind other apps' windows. Activate the app and raise the window. Optional and silent: both calls are skipped if missing.
+   */
+  private bringForward(window: NativeWindow): void {
+    if (!Platform.isMacOS) return;
+    try { this.remote?.app?.focus?.({ steal: true }); } catch { /* Raising is a convenience. */ }
+    try { (window as { moveTop?: () => void }).moveTop?.(); } catch { /* Same. */ }
   }
 
   private canPositionWindow(): boolean {

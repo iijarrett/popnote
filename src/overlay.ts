@@ -83,6 +83,12 @@ export class OverlayControls {
     this.range.disabled = true;
     this.updateValues();
 
+    // The three-dots button shows a focus ring only for real keyboard use (Tab, or the Show controls command), never when
+    // focus lands on it by itself after the window is shown again.
+    this.listen(this.document, "keydown", (event) => {
+      if ((event as KeyboardEvent).key === "Tab") root.classList.add("popnote-keyboard");
+    }, true);
+    this.listen(this.document, "pointerdown", () => root.classList.remove("popnote-keyboard"), true);
     this.listen(this.recovery, "click", () => {
       if (this.expanded) this.setExpanded(false);
       else this.recover();
@@ -305,11 +311,14 @@ export class OverlayControls {
     this.updateValues();
   }
 
+  /** True while the note picker or the opacity slider is open, so the window should not take focus away from it. */
+  hasOpenPanel(): boolean { return this.panelOpen || this.notesOpen; }
+
   recover(focus = false): void {
     if (!this.allowed()) return;
     this.rememberFocus(this.document.activeElement);
     this.setExpanded(true);
-    if (focus && this.document.hasFocus()) this.recovery.focus();
+    if (focus && this.document.hasFocus()) { this.root.classList.add("popnote-keyboard"); this.recovery.focus(); }
   }
 
   dispose(): void {

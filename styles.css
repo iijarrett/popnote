@@ -206,6 +206,12 @@
   outline-offset: 2px;
 }
 
+/* No focus ring on the three-dots button unless the keyboard is in use (see overlay.ts). */
+.popnote-overlay:not(.popnote-keyboard) button.popnote-overlay-recovery:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .popnote-overlay-button[aria-pressed="true"] {
   color: var(--text-on-accent);
   background: var(--interactive-accent);
