@@ -21,6 +21,8 @@ does not survive the call into the main process, so a black glyph disappears. Th
 pencil drawing with a white outline at 18 px, the height of the system icons. Windows and Linux icons are unchanged.
 (3) After hide and show, keyboard focus landed on the controls button, not the note; `toggle` now reports what it did
 and the caret is returned to the note (not when the picker or slider is open).
+(4) The three-dots button had its own lighter box and border at rest; it is now plain faint dots, with the box only on hover, while the
+controls are open and on keyboard focus (checked in the test vault and a second vault).
 Not tested: Switch note and Slider from the real menu; moving between several desktops (this Mac has one besides the
 full-screen one); the icon on a light menu bar; Intel Macs and other Macs; Obsidian 1.15.1. A normal Quit once left the
 Obsidian main process hanging for minutes (cause not found; it was force-quit and relaunched, and the shortcut worked
