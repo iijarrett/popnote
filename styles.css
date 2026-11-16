@@ -146,22 +146,6 @@
   padding: 0;
 }
 
-/* At rest the three dots are quiet: no box, no border, no shadow. The box returns on hover, while the controls are open and on keyboard focus.
-   The selectors are deliberately specific: Obsidian's own button rules would otherwise win. */
-.popnote-overlay button.popnote-overlay-recovery:not(.popnote-quiet-off) {
-  color: var(--text-faint);
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.popnote-overlay button.popnote-overlay-recovery:not(.popnote-quiet-off):hover,
-.popnote-overlay button.popnote-overlay-recovery:not(.popnote-quiet-off):focus-visible,
-.popnote-overlay button.popnote-overlay-recovery:not(.popnote-quiet-off)[aria-expanded="true"] {
-  color: var(--text-normal);
-  background: var(--background-modifier-hover);
-}
-
 .popnote-overlay-bar,
 .popnote-overlay-panel {
   display: flex;
