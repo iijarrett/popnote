@@ -150,3 +150,24 @@ test("the pin hint is added to the Pin tooltip", () => {
   const h = host({ pinHint: "Win+Tab shows it on every desktop" }); h.overlay.setNativeAvailability(true, true);
   assert.equal(h.pin.title, "Keep PopNote on top. Win+Tab shows it on every desktop");
 });
+
+test("sync shows pin and opacity values changed from outside, such as the tray", () => {
+  const h = host(); h.overlay.sync(true, 0.8);
+  assert.equal(h.pin.getAttribute("aria-pressed"), "true");
+  assert.equal(h.range.value, "0.8"); assert.equal(h.opacity.textContent, "80%");
+  h.release(); h.overlay.sync(false, 0.5);
+  assert.equal(h.pin.getAttribute("aria-pressed"), "true", "a released overlay ignores later changes");
+});
+
+test("openPanel reveals the controls and opens the note picker or the slider with focus, for the tray menu", () => {
+  const h = host(); assert.equal(h.bar.hidden, true);
+  h.overlay.openPanel("notes");
+  assert.equal(h.bar.hidden, false); assert.equal(h.noteButton.getAttribute("aria-expanded"), "true");
+  assert.equal(h.document.activeElement, h.search);
+  assert.deepEqual(h.results().map(item => item.dataset.path), ["Welcome.md", "Plans/Trip.md", "Journal.md"]);
+  h.overlay.openPanel("opacity");
+  assert.equal(h.noteButton.getAttribute("aria-expanded"), "false"); assert.equal(h.opacity.getAttribute("aria-expanded"), "true");
+  assert.equal(h.document.activeElement, h.range);
+  h.release(); h.overlay.openPanel("notes");
+  assert.equal(h.opacity.getAttribute("aria-expanded"), "true", "a released overlay ignores it");
+});

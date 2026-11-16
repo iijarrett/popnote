@@ -270,6 +270,34 @@ export class OverlayControls {
     this.noteButton.title = `Showing ${note}. Choose another note`;
   }
 
+  /** Opens the note picker or the opacity slider from outside the window, such as the tray menu. */
+  openPanel(panel: "notes" | "opacity"): void {
+    if (!this.allowed()) return;
+    this.recover();
+    this.notesOpen = panel === "notes";
+    this.panelOpen = !this.notesOpen;
+    if (this.notesOpen) {
+      this.search.value = "";
+      this.showResults();
+    }
+    this.render();
+    const focus = () => {
+      if (this.disposed) return;
+      if (panel === "notes" ? this.notesOpen : this.panelOpen) (panel === "notes" ? this.search : this.range).focus();
+    };
+    focus();
+    // Obsidian hands focus to the note editor just after a window opens; take it back.
+    this.document.defaultView?.setTimeout?.(focus, 150);
+  }
+
+  /** The tray changed pin or opacity: show the new values. */
+  sync(pinned: boolean, opacity: number): void {
+    if (!this.allowed()) return;
+    this.pinned = pinned;
+    this.opacity = opacity;
+    this.updateValues();
+  }
+
   setNativeAvailability(pin: boolean, opacity: boolean): void {
     if (!this.allowed()) return;
     this.pinButton.disabled = !pin;

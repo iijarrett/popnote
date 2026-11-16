@@ -160,14 +160,17 @@ function host(initial = {}, options = {}) {
   class Tray {
     constructor(image) { this.image = image; this.handlers = new Map(); this.destroyed = false; trays.push(this); }
     setToolTip(tip) { this.tip = tip; }
+    setContextMenu(menu) { this.menu = menu; }
+    popUpContextMenu(menu) { this.popped = menu; }
     on(name, handler) { this.handlers.set(name, handler); }
     destroy() { this.destroyed = true; }
     isDestroyed() { return this.destroyed; }
   }
+  const Menu = { buildFromTemplate: items => items };
   const nativeImage = { createFromDataURL: url => ({ url, resize() { return this; }, setTemplateImage(value) { this.template = value; } }) };
   const remote = {
     process: { pid: 123 }, BrowserWindow: { getAllWindows: () => windows },
-    ...(options.tray === false ? {} : { Tray, nativeImage }),
+    ...(options.tray === false ? {} : { Tray, nativeImage, Menu, nativeTheme: { shouldUseDarkColorsForSystemUI: options.darkTaskbar } }),
     screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 2000, height: 1200 } }) },
     globalShortcut: {
       register: (key, callback) => { if (options.refuse?.(key) || keys.has(key)) return false; keys.set(key, callback); return true; },
@@ -182,7 +185,7 @@ function host(initial = {}, options = {}) {
       if (name === "obsidian") return {
         Plugin, PluginSettingTab: class {}, Setting, TFile, WorkspaceWindow, apiVersion: "1.15.0",
         Notice: class { constructor(message) { notices.push(message); } },
-        Platform: { isDesktop: options.desktop !== false, isMacOS: options.macOS === true, isLinux: false, isWin: options.windows === true },
+        Platform: { isDesktop: options.desktop !== false, isMacOS: options.macOS === true, isLinux: options.linux === true, isWin: options.windows === true },
       };
       if (name === "electron") return { remote };
       throw Error(name);
@@ -266,11 +269,19 @@ test("prepare and successful Apply survive restart; refused shortcuts never repl
   assert.deepEqual(restarted.opened, ["notes/A.md"]);
 });
 
-test("a missing saved note produces a Notice and does not open the active note", async () => {
-  const h = host(settings); h.files.clear(); await h.plugin.onload();
+test("a missing saved note falls back to the note in front, says so, and remembers the new note", async () => {
+  const h = host(settings); h.files.clear(); const b = new TFile("notes/B.md"); h.files.set(b.path, b);
+  await h.plugin.onload(); h.plugin.app.workspace.getActiveFile = () => b;
   h.keys.get("Control+Alt+Shift+P")(); await settle();
-  assert.equal(h.opened.length, 0);
-  assert.ok(h.notices.some(value => value.includes("notes/A.md")));
+  assert.deepEqual(h.opened, ["notes/B.md"]);
+  assert.ok(h.notices.some(value => value.includes("notes/A.md") && value.includes("unavailable") && value.includes("notes/B.md")));
+  assert.equal(h.disk().notePath, "notes/B.md");
+});
+
+test("a vault with no notes at all gets a Notice and no window", async () => {
+  const h = host(settings); h.files.clear(); await h.plugin.onload(); h.plugin.app.workspace.getActiveFile = () => null;
+  h.keys.get("Control+Alt+Shift+P")(); await settle();
+  assert.equal(h.opened.length, 0); assert.ok(h.notices.some(value => value.includes("no notes to show")));
 });
 
 test("opacity saves immediately and queued changes remain ordered through unload", async () => {
@@ -301,12 +312,12 @@ test("debug logging is off by default and stores nothing; turned on it logs life
   const quiet = host(settings);
   await quiet.plugin.onload(); quiet.ready(); quiet.commands.get("use-current-note")(); await settle();
   quiet.plugin.onunload(); await settle();
-  assert.equal(quiet.logs.filter(line => line.includes("[PopNote restart]")).length, 0);
+  assert.equal(quiet.logs.filter(line => line.includes("[PopNote]")).length, 0);
   assert.equal(quiet.storage.size, 0);
   const loud = host({ ...settings, debug: true });
   await loud.plugin.onload(); loud.ready(); loud.commands.get("use-current-note")(); await settle();
   loud.plugin.onunload(); await settle();
-  for (const event of ["plugin-load", "layout-ready", "save-complete", "plugin-unload"])
+  for (const event of ["plugin-load", "save-complete", "plugin-unload"])
     assert.ok(loud.logs.some(line => line.includes(event)), `missing ${event}`);
   assert.equal(loud.storage.size, 0);
 });
@@ -315,7 +326,7 @@ test("debug logging can be switched on from settings and is remembered", async (
   const h = host(settings); await h.plugin.onload();
   h.plugin.setDebug(true); await settle();
   assert.equal(h.disk().debug, true);
-  assert.ok(h.logs.some(line => line.includes("save-requested")));
+  assert.ok(h.logs.some(line => line.includes("save-complete")));
   const restarted = host(h.disk()); await restarted.plugin.onload();
   assert.ok(restarted.logs.some(line => line.includes("plugin-load")));
 });
@@ -352,7 +363,6 @@ test("layout events never create or clean up a restored floating window", async 
   await h.plugin.app.workspace.openPopoutLeaf();
   h.ready(); h.event("window-open"); h.event("window-close");
   assert.equal(h.opened.length, 0); assert.equal(h.windows[0].destroyed, false);
-  assert.ok(h.logs.some(line => line.includes('"floatingWindows":1') && line.includes('"ownedPopoutOpen":false')));
   h.plugin.onunload(); await settle();
   assert.equal(h.windows[0].destroyed, false);
 });
@@ -567,7 +577,7 @@ test("released overlay listeners cannot affect a later window", async () => {
 });
 
 test("routine native diagnostics stay in logs rather than visible Notices", async () => {
-  const h = host(guardedSettings); await h.plugin.onload(); h.keys.get(settings.shortcut)(); await settle();
+  const h = host({ ...guardedSettings, debug: true }); await h.plugin.onload(); h.keys.get(settings.shortcut)(); await settle();
   h.keys.get(settings.shortcut)(); await settle(); h.keys.get(settings.shortcut)(); await settle();
   assert.ok(h.logs.some(line => line.includes("Native window ID") && line.includes("created")));
   assert.ok(h.logs.some(line => line.includes("Native window ID") && line.includes("reused")));
@@ -693,6 +703,92 @@ test("the tray icon is off by default, toggles the window on click, and is destr
   assert.equal(second.destroyed, true);
 });
 
+test("a tray click hides a visible window even though the click took its focus", async () => {
+  const h = host({ ...settings, tray: true }); await h.plugin.onload();
+  h.trays[0].handlers.get("click")(); await settle();
+  const [window] = h.windows; window.focused = false;
+  h.trays[0].handlers.get("click")(); await settle();
+  assert.equal(window.visible, false);
+  h.trays[0].handlers.get("click")(); await settle();
+  assert.equal(window.visible, true);
+});
+
+const labels = items => [...items].map(item => item.type === "separator" ? "separator" : item.label);
+const rightClick = h => { h.trays[0].handlers.get("right-click")(); return h.trays[0].popped; };
+
+test("tray icon: theme-matched icons, and a right-click menu built fresh with show/hide, keep on top, opacity and notes", async () => {
+  const dark = host({ ...settings, tray: true }, { darkTaskbar: true }); await dark.plugin.onload();
+  const light = host({ ...settings, tray: true }, { darkTaskbar: false }); await light.plugin.onload();
+  const unknown = host({ ...settings, tray: true }); await unknown.plugin.onload();
+  assert.equal(new Set([dark, light, unknown].map(h => h.trays[0].image.url)).size, 3);
+  const h = host({ ...settings, tray: true }); h.files.set("notes/B.md", new TFile("notes/B.md"));
+  await h.plugin.onload();
+  const items = rightClick(h);
+  assert.deepEqual(labels(items), ["Show or hide PopNote", "Keep on top", "Opacity", "separator", "Find note…", "Switch note"]);
+  assert.equal(items[1].type, "checkbox"); assert.equal(items[1].checked, false);
+  assert.deepEqual(labels(items[2].submenu), ["100%", "80%", "60%", "40%", "separator", "Slider…"]);
+  assert.deepEqual([...items[2].submenu].slice(0, 4).map(item => item.checked), [false, false, true, false], "saved opacity 0.6 is ticked");
+  assert.deepEqual(labels(items[5].submenu).sort(), ["notes/A", "notes/B"]);
+  assert.equal(items[5].submenu.find(item => item.label === "notes/A").checked, true);
+  items[0].click(); await settle(); assert.deepEqual(h.opened, ["notes/A.md"]);
+});
+
+test("tray: Keep on top works with the window closed (remembered for next time) and open (applied and shown on the button)", async () => {
+  const h = host(settings); await h.plugin.onload(); h.plugin.setTray(true);
+  rightClick(h)[1].click(); await settle();
+  assert.equal(h.disk().pinned, true); assert.equal(rightClick(h)[1].checked, true);
+  h.keys.get(settings.shortcut)(); await settle();
+  assert.equal(h.windows[0].pinned, true, "the next summon applies the remembered pin");
+  const button = h.windows[0].dom.label(h.controls(), "Keep PopNote on top");
+  assert.equal(button.getAttribute("aria-pressed"), "true");
+  rightClick(h)[1].click(); await settle();
+  assert.equal(h.windows[0].pinned, false); assert.equal(button.getAttribute("aria-pressed"), "false");
+  assert.equal(h.disk().pinned, false);
+});
+
+test("tray: opacity presets apply to the open window, save, and update the window's own control", async () => {
+  const h = host(settings); await h.plugin.onload(); h.plugin.setTray(true);
+  rightClick(h)[2].submenu[3].click(); await settle();
+  assert.equal(h.disk().opacity, 0.4, "set while closed");
+  h.keys.get(settings.shortcut)(); await settle();
+  assert.equal(h.windows[0].alpha, 0.4);
+  rightClick(h)[2].submenu[1].click(); await settle();
+  assert.equal(h.windows[0].alpha, 0.8); assert.equal(h.disk().opacity, 0.8);
+  const root = h.controls();
+  assert.equal(h.windows[0].dom.label(root, "Opacity").value, "0.8");
+  assert.deepEqual([...rightClick(h)[2].submenu].slice(0, 4).map(item => item.checked), [false, true, false, false]);
+});
+
+test("tray: Switch note opens the window with that note, or switches and shows an open or hidden one", async () => {
+  const h = host(settings); h.files.set("notes/B.md", new TFile("notes/B.md"));
+  await h.plugin.onload(); h.plugin.setTray(true);
+  rightClick(h)[5].submenu.find(item => item.label === "notes/B").click(); await settle();
+  assert.deepEqual(h.opened, ["notes/B.md"]); assert.equal(h.disk().notePath, "notes/B.md");
+  h.windows[0].visible = false;
+  rightClick(h)[5].submenu.find(item => item.label === "notes/A").click(); await settle();
+  assert.deepEqual(h.opened, ["notes/B.md", "notes/A.md"]); assert.equal(h.windows.length, 1);
+  assert.equal(h.windows[0].visible, true, "a hidden window is shown");
+  assert.equal(h.disk().notePath, "notes/A.md");
+});
+
+test("tray: a vault with no notes gets a disabled placeholder, and & in a note name is escaped", async () => {
+  const empty = host(settings); empty.files.clear(); await empty.plugin.onload(); empty.plugin.setTray(true);
+  const placeholder = rightClick(empty)[5].submenu[0];
+  assert.equal(placeholder.label, "No notes"); assert.equal(placeholder.enabled, false);
+  const amp = host({ ...settings, notePath: "R&D.md" }); amp.files.clear(); amp.files.set("R&D.md", new TFile("R&D.md"));
+  await amp.plugin.onload(); amp.plugin.setTray(true);
+  assert.equal(rightClick(amp)[5].submenu[0].label, "R&&D");
+});
+
+test("tray on Linux sets its menu up front and renews it when state changes", async () => {
+  const h = host({ ...settings, tray: true }, { linux: true }); await h.plugin.onload();
+  const tray = h.trays[0];
+  assert.equal(tray.handlers.has("right-click"), false); assert.equal(tray.menu[1].checked, false);
+  const before = tray.menu;
+  tray.menu[1].click(); await settle();
+  assert.notEqual(tray.menu, before, "the menu was rebuilt"); assert.equal(tray.menu[1].checked, true);
+});
+
 test("a saved tray setting is restored at startup and released when the renderer shuts down", async () => {
   const h = host({ ...settings, tray: true }); await h.plugin.onload();
   assert.equal(h.trays.length, 1);
@@ -719,4 +815,20 @@ test("the all-desktops setting is saved, and the first-run tip appears once on W
   win.keys.get(settings.shortcut)(); win.keys.get(settings.shortcut)(); await settle();
   assert.equal(win.notices.filter(value => value.includes("Win+Tab")).length, 1);
   assert.equal(h.notices.filter(value => value.includes("Win+Tab")).length, 0);
+});
+
+test("tray: Find note and Slider bring the window up with that panel open and focused", async () => {
+  const h = host(settings); await h.plugin.onload(); h.plugin.setTray(true);
+  rightClick(h)[4].click(); await settle();
+  assert.deepEqual(h.opened, ["notes/A.md"], "a closed window is created");
+  const d = h.windows[0].dom, root = h.controls();
+  const picker = d.label(root, "Choose the note to show"), search = d.label(root, "Find a note");
+  assert.equal(picker.getAttribute("aria-expanded"), "true"); assert.equal(d.document.activeElement, search);
+  assert.equal(d.label(root, "PopNote controls").hidden, false, "the controls are revealed");
+  h.windows[0].visible = false;
+  rightClick(h)[2].submenu[5].click(); await settle();
+  assert.equal(h.windows[0].visible, true, "a hidden window is shown");
+  assert.equal(d.label(root, "Window opacity").getAttribute("aria-expanded"), "true");
+  assert.equal(picker.getAttribute("aria-expanded"), "false", "only one panel is open");
+  assert.equal(d.document.activeElement, d.label(root, "Opacity"));
 });

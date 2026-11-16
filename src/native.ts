@@ -36,9 +36,14 @@ type NativeWindow = {
 /** Below this the tab strip cannot hold PopNote's controls plus a place to grab the window. */
 export const MINIMUM_WINDOW = { width: 340, height: 160 };
 
-// 32 x 32 note-card icons. The Mac one is black so macOS can tint it as a template image.
-const TRAY_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAWElEQVR42u2WwQoAIAhD/X/857x3Kh1Y8gYeXQ8cNDOEDuXu62baHpaCVIwkEFWD0r7qlmkfAPbFbPrnAJABQkgIAcj++XMAvuwEskbUVsnaS+kTtRyNVwA8KxS9CR8rAgAAAABJRU5ErkJggg==";
-const TRAY_ICON_MAC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAVUlEQVR42u2WwQoAIAhD/f+frruncgNL3sCj64GDFoHQudbltD1sBVGMLBCqgbTvumXZB4C8WE3/HAAyQAgJIQDVP38OwJedwNaI2ipZeyl9opaj2doJ38k3JCAAYwAAAABJRU5ErkJggg==";
+// 64 x 64 notepad-and-pencil icons (shrunk to 16): dark and light for the taskbar theme (dark also serves as the macOS template image), gray when unknown.
+const png = (data: string) => `data:image/png;base64,${data}`;
+const ICON_DARK = png("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADlElEQVR42u1bLWwqQRBGIBCIihGICsQTyIonKhDICsQTyCcQlUhExRMklScqEAjESQSiAvFEBRKJRCAqEE8gKioQFX3vkrlks9m/m9293eu7JpM0Ye9u5ruZ2Zlv5xoA0PifpVEDUANAvrgHAAlKz/Oa6ADIFH0HgE+Ud4HyrtZECUDCKJ1L4mlNlACkAsVTT2tqAGoAagBqAIID0AeAKQAsUMGjQPEj/pY6XLPA5/ZDATACgINAyRByQH1U+l4DwB4AhrYANAFgGYnhvCxRP5HeGy6UrqgAxGo8CwKv80/Buj86r5G5/Wfk8sp5QfZ3VqxfA0DHFABZzGcPWJWcBFcSw/gYXxuA9gYAYx0AfQWC7UC9QJszkN8mWwCwLeA9WZ7oygCYSt58O3A32EY9zlxiazH/T/Atm4AwkQGwECxeRcIHrAQJLcW332W2wY3G+K0qBIJXZgrh437A6HhB720yO4Iod1xY968aAHxIvAp03TFeBILkONUlwaoAMFe4+Me/NTPGG34AwAnBaX4FAG7RSF2i2+PaBibOrkkdEDsArYK9yQcm15ZpJWgCQJ61UwuhMsCPhKpxr+gdCgPA79s2UpQBvjF0fd4Dbov0AjoAEsc1vSkD3MQ36fz+VQHggXDvoyr2qxQCPSxgit5/QCFEYkyCO4LxcyojFNs2OCEYfxI0b5UEoEsMt6ENKRoTAC8E41NbVjgWAMYE48/YAHkHwEUSVCXD6wLEBisjF+cCZW6Dsu1qTbjH2tXBSNmF0NIBI/2GXlM5AE4cv6ejtmUydnk0VmYIDA2erZMX12eDZSXBmYDvo5TS3RAA+OD3TgQAJj5Oh0MAMCcYv/N1PF42AAOC8ReXo3QhAWhJzgZ18uBzQMJHEpS1volrfi/mbZAnP3pEfu+G0/e+bABsCqE75j53hOsfBVxBWiUABhbd3oHj93KuIK1SCHSITI+I2v7tKkGHSoIzC35v7HKHCrUNPhWYBWL5vQ7HFVQWgNSwzdVxBZUFYKOp9BLBjN/Ih242IzI2spUku4VsnA314K9ZuAbAdEjKVg6c4dmb/KbpGEVkydQ1AKZjcraSj7c8C6q7hmZMjpW+awBMByWLyr2A8/+uOBB50gxK5sWRl2lxH6OyJnmkg4ZffNLgoYalVXnkCguji+WwtFMAfIzL83kkq+1/EQ5Bli5b4rI/mMjzyIpAgR9cub2LT2bKkuCfzHx5+QulxNeXN/2+FwAAAABJRU5ErkJggg==");
+const ICON_LIGHT = png("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADlElEQVR42u1bLWwqQRBGIBCIigpEBeIJZMUTFQhkBeIJZAWiEomoeIKk8kQFAoE4iUBUICoqkEgkAlGBeALRSSoQFX2PZC7ZbPbvZndv9/pOTNKkyzHz3ey3M98ONQCo/c9WqwCoACB/uAMACVrH85roADg7+gEAX2gfAuddrYkSgIRxOrPE05ooAUgFjqee1lQAVABUAFQABAegCwBjAJihg3uB43v8X+pwzQy/txsKgAEA7AROhrAd+qPy9woAtgDQtwWgDgDzSALnbY7+ifxecVvpggpArMGzIPA+3wnW/dFljSztvyK3Ny4LLgHgqFi/BICWKQCyPX/+gkXBJLiQBMbv8aUBaO8AMNQB0FUg2AzUCzS5APljsgEA6xzZc+aJtgyAseTNNwN3g03048gRW4P5e4Rv2QSEkQyAmWDxIhI9YCEgtBTffps5Blea4NeqLRC8MlMYv+97jI8nzN46cyKIuOPEpn/ZAOC3xJvA1w2TRZcCchzrSLAsAEwVKf75b82EyYZfAHBAcOrfAYAbDFJHdFtcW0PibJvUAbED0MjZm3wiuTZMK0ETADLWTi2MqgA/EqrGraJ3yA0Af27bWF4F+Now9fkMuMnTC+gASBzX9KYKcB3fpPPnlwWAB8Kz96q9X6Yt0MECJu/zexRBJEYS3BCCn1IVodiOwREh+IOgeSslAG3iduvbiKIxAfBKCD61VYVjAWBICP6IDZB3AFyQoIoMr3IIG6wNXNwLFHkMyo6rJeEZS1cXI0UXQnMHivQ7Zk3pADhw+p5O2pbZ0OXVWJFboG/w3Tp7dX03WBQJTgR6H6WUbocAwIe+dyAAMPJxOxwCgCkh+I2v6/GiAegRgj+5HKULCUBDcjeoswefAxI+SFDW+iau9b2Yj0Fe/OgQ9b1rzt/7ogGwKYRumefcEj7/KNAK0jIB0LPo9nacvpdpBWmZtkCLqPSIpO0XVwQdigQnFvre0OUJFeoYfMoxC8Tqey1OKygtAKlhm6vTCkoLwEpT6SWCGb+BD99sRmRsbC0hu5lsnA394D8zcw2A6ZCUre24wM9v8oemYxSJJWPXAJiOydlaNt7yLKjuapoxOda6rgEwHZTMa/cCzf+n4kLkSTMomRVHXqbFfYzKmvBICwM/+ZTBQw1Lq3jkAgujk+WwtFMAfIzL8zxyru1/Ey5B5i5b4qJ/MJHxyIIgge9cpb2Ln8wUZcF/MvPt7S/w2hoNeSKc6gAAAABJRU5ErkJggg==");
+const ICON_GRAY = png("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADlElEQVR42u1bLWwqQRBGIBCIigpEBeIJZMUTFQhkBeIJZAWiEomoeIKk8kQFySAQJxGIJxAVFUgkEoGoQDyBqKhAVPQ9krlks9m/m9293WtPTNKkyzHz3ey3M98ONQCofWerVQBUAJA/3AGABK3jeU10AJwdfQeAT7R3gfOu1kQJQMI4nVniaU2UAKQCx1NPayoAKgAqACoAggPQBYAxAMzQwb3A8T3+L3W4Zobf2w0FwAAAdgInQ9gO/VH5ewUAWwDo2wJQB4B5JIHzNkf/RH6vuK10QQUg1uBZEHif7wTr/uqyRpb2n5HbK5cFlwBwVKxfAkDLFADZnj9/waJgElxIAuP3+NIAtDcAGOoA6CoQbAbqBZpcgPwx2QCAdY7sOfNEWwbAWPLmm4G7wSb6ceSIrcH8PcK3bALCSAbATLB4EYkesBAQWopvv80cgytN8GvVFghemSmM3/c9xscTZm+dORFE3HFi079sAPBb4lXg64bJoksBOY51JFgWAKaKFP/4v2bCZMMvADggOPWvAMANBqkjui2urSFxtk3qgNgBaOTsTT6QXBumlaAJABlrpxZGVYAfCVXjVtE75AaAP7dtLK8CfG2Y+nwG3OTpBXQAJI5relMFuI5v0vnzywLAA+HZe9XeL9MW6GABk/f5PYogEiMJbgjBT6mKUGzH4IgQ/EHQvJUSgDZxu/VtRNGYAHghBJ/aqsKxADAkBH/EBsg7AC5IUEWGVzmEDdYGLu4FijwGZcfVkvCMpauLkaILobkDRfoNs6Z0ABw4fU8nbcts6PJqrMgt0Df4bp29uL4bLIoEJwK9j1JKt0MA4EPfOxAAGPm4HQ4BwJQQ/MbX9XjRAPQIwZ9cjtKFBKAhuRvU2YPPAQkfJChrfRPX+l7MxyAvfnSI+t415+990QDYFEK3zHNuCZ9/FGgFaZkA6Fl0eztO38u0grRMW6BFVHpE0vazK4IORYITC31v6PKECnUMPuWYBWL1vRanFZQWgNSwzdVpBaUFYKWp9BLBjN/Ah282IzI2tpaQ3Uw2zoZ+8J+ZuQbAdEjK1nZc4Oc3+UPTMYrEkrFrAEzH5GwtG2/5I6juapoxOda6rgEwHZTMa/cCzf+n4kLkSTMomRVHXqbFfYzKmvBICwM/+ZTBQw1Lq3jkAgujk+WwtFMAfIzL8zxyru1/Ey5B5i5b4qJ/MJHxyIIgge9cpb2Ln8wUZcF/MvPl7R+63jkOf5P4pwAAAABJRU5ErkJggg==");
+
+/** A tray menu entry described as plain data, so no Electron object leaves this file. */
+export type TrayItem = { label: string; checked?: boolean; disabled?: boolean; click?: () => void; submenu?: TrayItem[] } | "separator";
 
 export class PopNoteNative {
   private remote: any = null;
@@ -51,6 +56,7 @@ export class PopNoteNative {
   private disabled = new Set<string>();
   private previousId: number | null = null;
   private trayIcon: { destroy?(): void; isDestroyed?(): boolean } | null = null;
+  private trayMenu: (() => unknown) | null = null;
   private report: (message: string) => void;
 
   constructor(
@@ -76,26 +82,6 @@ export class PopNoteNative {
     if (!this.remote) {
       this.disable("Native access", "host remote APIs are unavailable");
     }
-  }
-
-  /** Window snapshots are only gathered while debug logging is on. */
-  tracing = false;
-
-  traceWindows(trigger: string): void {
-    if (!this.tracing) return;
-    this.attempt("Native restart diagnostics", () => {
-      this.method(this.remote.BrowserWindow, "getAllWindows");
-      const windows = this.remote.BrowserWindow.getAllWindows().map((window: NativeWindow) => {
-        for (const name of ["isDestroyed", "isVisible", "isMinimized", "isFocused"]) this.method(window, name);
-        if (window.isDestroyed()) return { id: window.id, destroyed: true };
-        return {
-          id: window.id, owned: window.id === this.window?.id, visible: window.isVisible(),
-          minimized: window.isMinimized(), focused: window.isFocused(),
-          opacity: typeof window.getOpacity === "function" ? window.getOpacity() : undefined,
-        };
-      });
-      this.trace("native-windows", { trigger, processId: this.remote.process?.pid, windows });
-    });
   }
 
   private disable(feature: string, reason: string): void {
@@ -212,7 +198,11 @@ export class PopNoteNative {
     }
   }
 
-  toggle(): void {
+  /**
+   * "toggle": hide when focused, otherwise show or focus. "hide-if-visible" is for the tray icon, whose click takes focus
+   * away, so a visible window must still hide. "show" never hides.
+   */
+  toggle(mode: "toggle" | "hide-if-visible" | "show" = "toggle"): void {
     this.attempt("Window toggle", () => {
       const window = this.liveWindow();
       if (!window) return;
@@ -230,7 +220,7 @@ export class PopNoteNative {
         if (!visible(true) || this.liveWindow() !== window) return;
         window.focus();
         action = "shown";
-      } else if (window.isFocused()) {
+      } else if (mode === "hide-if-visible" || (mode === "toggle" && window.isFocused())) {
         if (!visible(false)) return;
         action = "hidden";
       } else {
@@ -420,25 +410,42 @@ export class PopNoteNative {
     }
   }
 
-  /** Optional tray icon: a click runs `onClick`. Created on request, destroyed on disable and on unload. */
-  createTray(onClick: () => void): boolean {
+  /**
+   * Optional tray icon. A click runs `onClick`. `items` is read each time the menu opens, so it always shows current
+   * state. Windows and macOS pop the menu up on right-click; Linux has no such event, so there it is set up front and
+   * `refreshTrayMenu` renews it.
+   */
+  createTray(onClick: () => void, items: () => TrayItem[]): boolean {
     if (this.trayIcon) return true;
     return this.attempt("Tray icon", () => {
-      const { Tray, nativeImage } = this.remote;
+      const { Tray, nativeImage, Menu } = this.remote;
       if (typeof Tray !== "function" || typeof nativeImage?.createFromDataURL !== "function") {
         throw new Error("Tray is unavailable");
       }
       const mac = Platform.isMacOS;
-      let image = nativeImage.createFromDataURL(mac ? TRAY_ICON_MAC : TRAY_ICON);
+      const dark = this.remote.nativeTheme?.shouldUseDarkColorsForSystemUI;
+      let image = nativeImage.createFromDataURL(mac ? ICON_DARK : dark === true ? ICON_LIGHT : dark === false ? ICON_DARK : ICON_GRAY);
       if (typeof image.resize === "function") image = image.resize({ width: 16, height: 16 });
       if (mac && typeof image.setTemplateImage === "function") image.setTemplateImage(true);
       const tray = new Tray(image);
       this.trayIcon = tray;
+      // A failing action must never throw into the host, and one bad action should not switch the whole tray off.
+      const safely = (action?: () => void) => () => { try { action?.(); } catch { /* the action reports its own failure */ } };
+      const convert = (item: TrayItem): unknown => item === "separator" ? { type: "separator" } : {
+        label: item.label.replace(/&/g, "&&"), enabled: !item.disabled,
+        ...(item.checked !== undefined ? { type: "checkbox", checked: item.checked } : {}),
+        ...(item.submenu ? { submenu: item.submenu.map(convert) } : { click: safely(item.click) }),
+      };
+      const build = () => Menu.buildFromTemplate(items().map(convert));
       try {
         tray.setToolTip?.("PopNote");
-        tray.on("click", () => {
-          try { onClick(); } catch { this.disable("Tray icon", "click handler failed"); }
-        });
+        tray.on("click", () => { try { onClick(); } catch { this.disable("Tray icon", "click handler failed"); } });
+        if (typeof Menu?.buildFromTemplate === "function") {
+          if (Platform.isLinux) {
+            this.trayMenu = () => tray.setContextMenu?.(build());
+            this.trayMenu();
+          } else tray.on("right-click", () => tray.popUpContextMenu?.(build()));
+        }
       } catch (error) {
         this.destroyTray();
         throw error;
@@ -447,9 +454,15 @@ export class PopNoteNative {
     }) ?? false;
   }
 
+  /** Linux only: renew the tray menu after state changed. Elsewhere the menu is built when it opens. */
+  refreshTrayMenu(): void {
+    try { this.trayMenu?.(); } catch { /* A stale menu is better than a failed action. */ }
+  }
+
   destroyTray(): void {
     const tray = this.trayIcon;
     this.trayIcon = null;
+    this.trayMenu = null;
     try {
       if (tray && !tray.isDestroyed?.()) tray.destroy?.();
     } catch {
@@ -459,7 +472,6 @@ export class PopNoteNative {
 
   dispose(): void {
     this.destroyTray();
-    this.traceWindows("native-dispose");
     const released = this.unregisterShortcut();
     this.trace("shortcut-cleanup", { released });
     this.release();

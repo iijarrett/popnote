@@ -70,6 +70,15 @@ test("a missing minimum-size API disables only that feature", () => {
   assert.equal(h.native.pin(true), true); h.native.release(); assert.equal(h.original.pinned, false);
 });
 
+test("hide-if-visible hides a visible window that is not focused, as a tray click needs; show never hides", () => {
+  const h = host(); h.bind(); h.original.isFocused = () => false;
+  h.native.toggle(); assert.equal(h.original.visible, true, "a shortcut press only refocuses an unfocused window");
+  h.native.toggle("hide-if-visible"); assert.equal(h.original.visible, false);
+  h.native.toggle("hide-if-visible"); assert.equal(h.original.visible, true);
+  h.original.isFocused = () => true; h.native.toggle("show"); assert.equal(h.original.visible, true, "show never hides, even when focused");
+  h.native.release();
+});
+
 test("release preserves later external changes rather than overwriting them", () => {
   const h = host(); h.bind(); h.native.opacity(0.4); h.native.pin(true);
   h.native.restoreBounds({ x: 80, y: 90, width: 500, height: 450 });

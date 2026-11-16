@@ -101,9 +101,9 @@ export class PopNoteWindow {
     cancelAttachment?.();
     // Unregister focus handlers before removing a root that may contain focus.
     try { this.onRelease(reason); }
-    catch { this.trace("popout-cleanup-failed", { step: "window binding" }); }
+    catch { /* Cleanup continues with the remaining steps. */ }
     try { if (controls?.parentElement) controls.remove(); }
-    catch { this.trace("popout-cleanup-failed", { step: "controls" }); }
+    catch { /* Cleanup continues with the remaining steps. */ }
     controlsHost?.classList.remove("popnote-overlay-host");
 
     // Keep the markers through detach so a synchronous save excludes these tabs.
@@ -115,9 +115,8 @@ export class PopNoteWindow {
             if (leaf.getContainer() !== container || this.leavesIn(container).some((tab) => !ownedLeaves.has(tab))) break;
             leaf.detach();
           }
-          this.trace("popout-detach", { completed: true });
         }
-      } catch { this.trace("popout-detach", { completed: false }); }
+      } catch { /* A window that cannot be detached is left for the user to close. */ }
     }
     for (const leaf of ownedLeaves) this.compatibility.release(leaf);
     this.trace("popout-released", { reason });
@@ -167,11 +166,11 @@ export class PopNoteWindow {
         this.ownedLeaves.add(leaf);
         created = leaf;
       }
-    } catch { this.trace("popout-tab-create-failed", {}); }
+    } catch { /* No tab was added. */ }
     finally { this.addingTab = false; }
     if (!this.checkOwnership() || !created) return false;
     try { workspace.setActiveLeaf(created, { focus: true }); }
-    catch { this.trace("popout-tab-focus-failed", {}); }
+    catch { /* The tab exists even if focusing it failed. */ }
     return true;
   }
 
@@ -209,9 +208,6 @@ export class PopNoteWindow {
     const separate = container instanceof WorkspaceWindow && container.doc !== mainDocument &&
       container.win !== mainDocument.defaultView && container.win.document === container.doc &&
       container.doc.defaultView === container.win;
-    this.trace("popout-container-check", {
-      separateContainer: separate, initialViewInMainDocument: leaf.view.containerEl.ownerDocument === mainDocument,
-    });
     // Container identity is available before queued DOM adoption. Never claim or detach a main-window leaf.
     if (!separate || !this.validContainer(container) || this.leavesIn(container).length !== 1 || leaf.getContainer() !== container) throw new Error("Obsidian did not return a separate pop-out with one leaf.");
     this.leaf = leaf;
@@ -227,7 +223,6 @@ export class PopNoteWindow {
       const document = await this.waitForAttachment(leaf, container);
       if (this.attachedDocument(leaf, container) !== document) throw new Error("Pop-out attachment changed while opening.");
       this.document = document;
-      this.trace("popout-attached", { separateDocument: document !== mainDocument, connected: true });
       return document;
     } catch (error) {
       if (this.leaf === leaf) this.close();
@@ -246,7 +241,6 @@ export class PopNoteWindow {
   private waitForAttachment(leaf: WorkspaceLeaf, container: WorkspaceWindow): Promise<Document> {
     const document = this.attachedDocument(leaf, container);
     if (document) return Promise.resolve(document);
-    this.trace("popout-attachment-wait", { timeoutMs: 5000 });
     return new Promise((resolve, reject) => {
       let finished = false;
       let observer: MutationObserver | undefined;

@@ -260,7 +260,6 @@ export class WorkspaceCompatibility {
     try {
       for (const [id, leaf] of this.owned) {
         const found = this.host.getLeafById(id);
-        this.trace("ownership-lookup", { id, found: found === leaf, connected: leaf.view.containerEl.isConnected });
         if (!found && !leaf.view.containerEl.isConnected) this.owned.delete(id);
         else if (found !== leaf) this.fail(new Error("owned leaf lookup changed"));
       }

@@ -1,6 +1,5 @@
 import { Notice, Platform, Plugin, PluginSettingTab, Setting, TFile, apiVersion } from "obsidian";
-import { RestartTrace } from "./src/diagnostics";
-import { PopNoteNative, type WindowBounds } from "./src/native";
+import { PopNoteNative, type TrayItem, type WindowBounds } from "./src/native";
 import { rankNotes } from "./src/notes";
 import { OverlayControls } from "./src/overlay";
 import { PopNoteWindow } from "./src/window";
@@ -21,10 +20,8 @@ export default class PopNotePlugin extends Plugin {
   private storedData: Record<string, unknown> = {};
   private saveTimer?: ReturnType<typeof setTimeout>;
   private saveQueue = Promise.resolve();
-  private saveRevision = 0;
   private pendingSaves = 0;
   private savedShortcut?: string;
-  private restartTrace?: RestartTrace;
   private compatibility?: WorkspaceCompatibility;
   private shortcut = "";
   private shortcutActive = false;
@@ -36,10 +33,9 @@ export default class PopNotePlugin extends Plugin {
   async onload(): Promise<void> {
     if (!Platform.isDesktop) return;
     const mainWindow = this.app.workspace.containerEl.ownerDocument.defaultView;
-    this.restartTrace = new RestartTrace(this.app.vault.getName());
     // Install before loadData or any other await, not merely before layout-ready.
     this.compatibility = new WorkspaceCompatibility(this.app.workspace,
-      (message) => { new Notice(message); }, (event, details) => this.trace(event, details),
+      (message) => { new Notice(message); }, (event, details) => this.log(event, details),
       () => { this.popout?.checkOwnership(); });
     this.compatibility.install();
     const defaults = {
@@ -51,18 +47,12 @@ export default class PopNotePlugin extends Plugin {
     this.allSpaces = defaults.allSpaces;
     await this.loadWindowSettings();
     if (this.stopped) return;
-    this.restartTrace.enabled = this.debug;
-    this.trace("plugin-load", { layoutReady: this.app.workspace.layoutReady, obsidianVersion: apiVersion });
-    this.popout = new PopNoteWindow(this.app, this.compatibility, (event, details) => this.trace(event, details),
+    this.log("plugin-load", { layoutReady: this.app.workspace.layoutReady, obsidianVersion: apiVersion });
+    this.popout = new PopNoteWindow(this.app, this.compatibility, (event, details) => this.log(event, details),
       (reason) => this.releaseWindowBinding(reason));
-    this.native = new PopNoteNative((message) => {
-      console.info(`[PopNote] ${message}`);
-      this.trace("native-action", { message });
-    }, (event, details) => this.trace(event, details), defaults.pinFallbackLevel);
-    this.native.tracing = this.debug;
+    this.native = new PopNoteNative((message) => this.log("native-action", { message }),
+      (event, details) => this.log(event, details), defaults.pinFallbackLevel);
     if (this.tray) this.applyTray(true);
-    this.registerEvent(this.app.workspace.on("window-open", () => this.traceLayout("workspace-window-open")));
-    this.registerEvent(this.app.workspace.on("window-close", () => this.traceLayout("workspace-window-close")));
     this.registerEvent(this.app.workspace.on("layout-change", () => {
       this.popout?.checkOwnership();
       this.compatibility?.audit();
@@ -70,10 +60,7 @@ export default class PopNotePlugin extends Plugin {
     }));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.refreshOverlayLabel()));
     this.app.workspace.onLayoutReady(() => {
-      if (!this.stopped) {
-        this.compatibility?.finishStartup();
-        this.traceLayout("layout-ready");
-      }
+      if (!this.stopped) this.compatibility?.finishStartup();
     });
     this.registerEvent(this.app.workspace.on("quit", (tasks) => {
       this.flushShutdownBounds();
@@ -81,14 +68,13 @@ export default class PopNotePlugin extends Plugin {
     }));
     if (mainWindow) {
       this.registerDomEvent(mainWindow, "beforeunload", (event) => {
-        this.trace("main-beforeunload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined });
+        this.log("main-beforeunload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined });
         if (!event.defaultPrevented) this.finishRendererShutdown("beforeunload");
       });
       this.registerDomEvent(mainWindow, "pagehide", (event) => {
         if (!event.persisted) this.finishRendererShutdown("pagehide");
       });
     }
-    this.traceLayout("startup-snapshot");
     this.addCommand({
       id: "use-current-note",
       name: "Use current note",
@@ -121,31 +107,9 @@ export default class PopNotePlugin extends Plugin {
     this.applyShortcut(this.shortcut, false);
   }
 
-  private trace(event: string, details: Record<string, unknown> = {}): void {
-    this.restartTrace?.record(event, details);
-  }
-
-  private traceLayout(event: string): void {
-    if (!this.debug) return;
-    try {
-      const mainDocument = this.app.workspace.containerEl.ownerDocument;
-      const floatingDocuments = new Set<Document>();
-      const floatingFiles: string[] = [];
-      this.app.workspace.iterateAllLeaves((leaf) => {
-        const document = leaf.view.containerEl.ownerDocument;
-        if (document === mainDocument) return;
-        floatingDocuments.add(document);
-        const file = leaf.getViewState().state?.file;
-        if (typeof file === "string") floatingFiles.push(file);
-      });
-      this.trace(event, {
-        layoutReady: this.app.workspace.layoutReady, ownedPopoutOpen: this.popout?.isOpen() ?? false,
-        floatingWindows: floatingDocuments.size, floatingFiles,
-      });
-      this.native?.traceWindows(event);
-    } catch {
-      this.trace("layout-diagnostic-unavailable", { trigger: event });
-    }
+  /** Debug logging: console only, never stored, and silent unless switched on in settings. */
+  private log(event: string, details: Record<string, unknown> = {}): void {
+    if (this.debug) console.info(`[PopNote] ${JSON.stringify({ time: new Date().toISOString(), event, ...details })}`);
   }
 
   private async loadWindowSettings(): Promise<void> {
@@ -173,10 +137,9 @@ export default class PopNotePlugin extends Plugin {
         this.bounds = Number.isFinite(x) && Number.isFinite(y) ? { x, y, width, height } : { width, height };
       }
     } catch {
-      this.trace("settings-load-failed");
+      this.log("settings-load-failed");
       new Notice("PopNote: saved window settings could not be read.");
     } finally {
-      this.trace("settings-loaded", { notePath: this.notePath, shortcut: this.shortcut, windowBounds: this.bounds, opacity: this.opacity });
     }
   }
 
@@ -203,7 +166,7 @@ export default class PopNotePlugin extends Plugin {
     // Obsidian can replace the renderer without calling the plugin's unload hook.
     const released = this.native.unregisterShortcut();
     if (released) this.shortcutActive = false;
-    this.trace("shortcut-cleanup", { released, source });
+    this.log("shortcut-cleanup", { released, source });
   }
 
   private queueSave(reason: string): void {
@@ -214,19 +177,13 @@ export default class PopNotePlugin extends Plugin {
       windowBounds: this.bounds, opacity: this.opacity, pinned: this.pinned,
       allSpaces: this.allSpaces, tray: this.tray, debug: this.debug, helpShown: this.helpShown,
     };
-    const revision = ++this.saveRevision;
     this.pendingSaves++;
-    this.trace("save-requested", {
-      revision, reason, notePath: snapshot.notePath, shortcut: snapshot.shortcut,
-      windowBounds: snapshot.windowBounds, opacity: snapshot.opacity,
-    });
     this.saveQueue = this.saveQueue.then(async () => {
-      this.trace("save-start", { revision, reason });
       try {
         await this.saveData(snapshot);
-        this.trace("save-complete", { revision, reason, notePath: snapshot.notePath, shortcut: snapshot.shortcut, windowBounds: snapshot.windowBounds, opacity: snapshot.opacity });
+        this.log("save-complete", { reason });
       } catch {
-        this.trace("save-failed", { revision, reason });
+        this.log("save-failed", { reason });
         new Notice("PopNote: settings could not be saved.");
       } finally {
         this.pendingSaves--;
@@ -241,7 +198,7 @@ export default class PopNotePlugin extends Plugin {
       return;
     }
     const registered = this.native?.registerShortcut(accelerator, () => { void this.toggle("shortcut"); }, !persist) ?? false;
-    this.trace("shortcut-registration", { accelerator, success: registered, source: persist ? "apply" : "startup" });
+    this.log("shortcut-registration", { accelerator, success: registered, source: persist ? "apply" : "startup" });
     if (registered) {
       this.shortcutActive = true;
       this.shortcut = accelerator;
@@ -275,15 +232,67 @@ export default class PopNotePlugin extends Plugin {
 
   setDebug(value: boolean): void {
     this.debug = value;
-    if (this.restartTrace) this.restartTrace.enabled = value;
-    if (this.native) this.native.tracing = value;
     this.queueSave("debug");
   }
 
   private applyTray(enabled: boolean): boolean {
     if (!this.native) return false;
     if (!enabled) { this.native.destroyTray(); return true; }
-    return this.native.createTray(() => { void this.toggle("tray"); });
+    return this.native.createTray(() => { void this.toggle("tray"); }, () => this.trayItems());
+  }
+
+  /** The right-click menu, read each time it opens so it shows current state. */
+  private trayItems(): TrayItem[] {
+    const percent = Math.round(this.opacity * 100);
+    const notes = this.noteMatches("").slice(0, 5);
+    const synced = (changed: boolean) => { if (changed) this.overlay?.sync(this.pinned, this.opacity); };
+    return [
+      { label: "Show or hide PopNote", click: () => { void this.toggle("tray"); } },
+      { label: "Keep on top", checked: this.pinned, click: () => synced(this.setPinned(!this.pinned)) },
+      { label: "Opacity", submenu: [
+        ...[100, 80, 60, 40].map((value) => ({
+          label: `${value}%`, checked: value === percent, click: () => synced(this.setOpacityValue(value / 100)),
+        })),
+        "separator" as const,
+        { label: "Slider…", click: () => { void this.openPanel("opacity"); } },
+      ] },
+      "separator",
+      { label: "Find note…", click: () => { void this.openPanel("notes"); } },
+      { label: "Switch note", submenu: notes.length ? notes.map((path) => ({
+        label: path.replace(/\.md$/i, ""), checked: path === this.notePath, click: () => { void this.showNote(path); },
+      })) : [{ label: "No notes", disabled: true }] },
+    ];
+  }
+
+  /** Pin from the window's button or the tray. With no open window it is just remembered for the next summon. */
+  private setPinned(value: boolean): boolean {
+    if (this.popout?.isOpen() && !this.native?.pin(value)) return false;
+    this.pinned = value;
+    this.queueSave("pin");
+    this.native?.refreshTrayMenu();
+    return true;
+  }
+
+  private setOpacityValue(value: number): boolean {
+    if (this.popout?.isOpen() && !this.native?.opacity(value)) return false;
+    this.opacity = value;
+    this.queueSave("opacity");
+    this.native?.refreshTrayMenu();
+    return true;
+  }
+
+  /** Bring the window up with the note picker or the opacity slider open, for the tray menu. */
+  private async openPanel(panel: "notes" | "opacity"): Promise<void> {
+    if (this.popout?.isOpen()) this.native?.toggle("show");
+    else await this.toggle("tray");
+    this.overlay?.openPanel(panel);
+  }
+
+  /** Choose a note from the tray and bring the window up with it. */
+  private async showNote(path: string): Promise<void> {
+    if (!(await this.chooseNote(path))) return;
+    if (this.popout?.isOpen()) this.native?.toggle("show");
+    else await this.toggle("tray");
   }
 
   private noteMatches(query: string): string[] {
@@ -305,9 +314,9 @@ export default class PopNotePlugin extends Plugin {
       return false;
     }
     this.notePath = file.path;
-    this.trace("note-chosen", { notePath: this.notePath });
     this.queueSave("note");
     this.overlay?.setNote(file.path);
+    this.native?.refreshTrayMenu();
     return true;
   }
 
@@ -342,7 +351,6 @@ export default class PopNotePlugin extends Plugin {
   }
 
   private async toggle(source: "command" | "shortcut" | "tray"): Promise<void> {
-    this.trace("toggle-request", { source, busy: this.busy, stopped: this.stopped, notePath: this.notePath });
     if (this.stopped || !this.native || !this.popout) return;
     const open = this.popout.isOpen();
     if (this.busy) return;
@@ -350,20 +358,20 @@ export default class PopNotePlugin extends Plugin {
     const operation = ++this.operation;
     try {
       if (open) {
-        this.native.toggle();
+        this.native.toggle(source === "tray" ? "hide-if-visible" : "toggle");
         return;
       }
-      const file = this.notePath ? this.app.vault.getAbstractFileByPath(this.notePath) : this.firstNote();
+      const saved = this.notePath ? this.app.vault.getAbstractFileByPath(this.notePath) : null;
+      // A saved note that no longer exists (or never existed in this vault) falls back to the note in front.
+      const file = saved instanceof TFile ? saved : this.firstNote();
       if (!(file instanceof TFile)) {
-        this.trace("summon-note-unavailable", { notePath: this.notePath });
-        new Notice(this.notePath
-          ? `PopNote: saved note ${this.notePath} is unavailable. Open another note and run "PopNote: Use current note".`
-          : "PopNote: this vault has no notes to show yet.");
+        new Notice("PopNote: this vault has no notes to show yet.");
         return;
       }
-      this.trace("popout-create-request", { source, notePath: file.path });
+      if (this.notePath && !(saved instanceof TFile)) {
+        new Notice(`PopNote: saved note ${this.notePath} is unavailable, so showing ${file.path} instead.`);
+      }
       const document = await this.popout.open(file);
-      this.trace("popout-created", { source, notePath: file.path });
       if (this.stopped) {
         this.popout.close();
         return;
@@ -374,31 +382,19 @@ export default class PopNotePlugin extends Plugin {
       const controls = this.popout.mountControls();
       const overlay = this.overlay = new OverlayControls(controls, file.path, this.pinned, this.opacity, {
         allowed,
-        pin: (value) => {
-          if (!allowed() || !this.native?.pin(value)) return false;
-          this.pinned = value;
-          this.queueSave("pin");
-          return true;
-        },
+        pin: (value) => allowed() && this.setPinned(value),
         notes: (query) => this.noteMatches(query),
         choose: (path) => allowed() ? this.chooseNote(path) : Promise.resolve(false),
         pinHint: Platform.isWin
           ? "To show it on every desktop: press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops"
           : undefined,
-        opacity: (value) => {
-          if (!allowed() || !this.native?.opacity(value)) return false;
-          this.opacity = value;
-          this.trace("opacity-changed", { opacity: value });
-          this.queueSave("opacity");
-          return true;
-        },
+        opacity: (value) => allowed() && this.setOpacityValue(value),
       });
       this.stopWatchingBounds?.();
       this.stopWatchingBounds = undefined;
       if (!this.native.bind(document, allowed)) return;
       this.native.minimumSize();
       if (this.bounds) this.native.restoreBounds(this.bounds);
-      this.trace("restore-request", { windowBounds: this.bounds, opacity: this.opacity });
       this.stopWatchingBounds = this.native.watchBounds((bounds) => {
         if (!allowed()) return;
         this.bounds = bounds;
@@ -407,9 +403,8 @@ export default class PopNotePlugin extends Plugin {
       this.native.allSpaces(this.allSpaces);
       const pinApplied = this.native.pin(this.pinned);
       const opacityApplied = this.native.opacity(this.opacity);
-      this.trace("opacity-restore", { opacity: this.opacity, applied: opacityApplied });
       overlay.setNativeAvailability(pinApplied, opacityApplied);
-      this.native.traceWindows("explicit-summon-complete");
+      
       if (this.notePath !== file.path) { this.notePath = file.path; this.queueSave("note"); }
       if (Platform.isWin && !this.helpShown) {
         this.helpShown = true;
@@ -418,7 +413,7 @@ export default class PopNotePlugin extends Plugin {
       }
       // Creation already shows the public pop-out; do not toggle it back to hidden.
     } catch (error) {
-      this.trace("summon-failed", { message: error instanceof Error ? error.message : String(error) });
+      this.log("summon-failed", { message: error instanceof Error ? error.message : String(error) });
       new Notice(`PopNote: could not open: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (this.operation === operation) this.busy = false;
@@ -426,14 +421,12 @@ export default class PopNotePlugin extends Plugin {
   }
 
   onunload(): void {
-    this.trace("plugin-unload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined, ownedPopoutOpen: this.popout?.isOpen() ?? false });
+    this.log("plugin-unload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined, ownedPopoutOpen: this.popout?.isOpen() ?? false });
     this.stopped = true;
     this.flushShutdownBounds();
     this.native?.dispose();
-    this.trace("owned-popout-close-request");
     this.popout?.close();
     this.compatibility?.dispose();
-    this.trace("plugin-unload-return", { pendingSaves: this.pendingSaves });
     this.overlay?.dispose();
     this.overlay = undefined;
   }
