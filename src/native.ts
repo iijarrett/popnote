@@ -34,7 +34,11 @@ type NativeWindow = {
 };
 
 /** Below this the tab strip cannot hold PopNote's controls plus a place to grab the window. */
-export const MINIMUM_WINDOW = { width: 300, height: 160 };
+export const MINIMUM_WINDOW = { width: 340, height: 160 };
+
+// 32 x 32 note-card icons. The Mac one is black so macOS can tint it as a template image.
+const TRAY_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAWElEQVR42u2WwQoAIAhD/X/857x3Kh1Y8gYeXQ8cNDOEDuXu62baHpaCVIwkEFWD0r7qlmkfAPbFbPrnAJABQkgIAcj++XMAvuwEskbUVsnaS+kTtRyNVwA8KxS9CR8rAgAAAABJRU5ErkJggg==";
+const TRAY_ICON_MAC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAVUlEQVR42u2WwQoAIAhD/f+frruncgNL3sCj64GDFoHQudbltD1sBVGMLBCqgbTvumXZB4C8WE3/HAAyQAgJIQDVP38OwJedwNaI2ipZeyl9opaj2doJ38k3JCAAYwAAAABJRU5ErkJggg==";
 
 export class PopNoteNative {
   private remote: any = null;
@@ -46,6 +50,7 @@ export class PopNoteNative {
   private accelerator: string | null = null;
   private disabled = new Set<string>();
   private previousId: number | null = null;
+  private trayIcon: { destroy?(): void; isDestroyed?(): boolean } | null = null;
   private report: (message: string) => void;
 
   constructor(
@@ -73,7 +78,11 @@ export class PopNoteNative {
     }
   }
 
+  /** Window snapshots are only gathered while debug logging is on. */
+  tracing = false;
+
   traceWindows(trigger: string): void {
+    if (!this.tracing) return;
     this.attempt("Native restart diagnostics", () => {
       this.method(this.remote.BrowserWindow, "getAllWindows");
       const windows = this.remote.BrowserWindow.getAllWindows().map((window: NativeWindow) => {
@@ -411,7 +420,45 @@ export class PopNoteNative {
     }
   }
 
+  /** Optional tray icon: a click runs `onClick`. Created on request, destroyed on disable and on unload. */
+  createTray(onClick: () => void): boolean {
+    if (this.trayIcon) return true;
+    return this.attempt("Tray icon", () => {
+      const { Tray, nativeImage } = this.remote;
+      if (typeof Tray !== "function" || typeof nativeImage?.createFromDataURL !== "function") {
+        throw new Error("Tray is unavailable");
+      }
+      const mac = Platform.isMacOS;
+      let image = nativeImage.createFromDataURL(mac ? TRAY_ICON_MAC : TRAY_ICON);
+      if (typeof image.resize === "function") image = image.resize({ width: 16, height: 16 });
+      if (mac && typeof image.setTemplateImage === "function") image.setTemplateImage(true);
+      const tray = new Tray(image);
+      this.trayIcon = tray;
+      try {
+        tray.setToolTip?.("PopNote");
+        tray.on("click", () => {
+          try { onClick(); } catch { this.disable("Tray icon", "click handler failed"); }
+        });
+      } catch (error) {
+        this.destroyTray();
+        throw error;
+      }
+      return true;
+    }) ?? false;
+  }
+
+  destroyTray(): void {
+    const tray = this.trayIcon;
+    this.trayIcon = null;
+    try {
+      if (tray && !tray.isDestroyed?.()) tray.destroy?.();
+    } catch {
+      this.disable("Tray cleanup", "could not destroy the tray icon");
+    }
+  }
+
   dispose(): void {
+    this.destroyTray();
     this.traceWindows("native-dispose");
     const released = this.unregisterShortcut();
     this.trace("shortcut-cleanup", { released });

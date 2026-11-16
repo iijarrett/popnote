@@ -6,6 +6,8 @@ import vm from "node:vm";
 import ts from "typescript";
 import { domHost } from "./dom-host.mjs";
 
+const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+
 function host(options = {}) {
   const dom = domHost(), { document, fire } = dom, calls = [];
   let allowed = true;
@@ -20,12 +22,17 @@ function host(options = {}) {
     allowed: () => allowed,
     pin: value => { calls.push(["pin", value]); return options.pin !== false; },
     opacity: value => { calls.push(["opacity", value]); return options.opacity !== false; },
+    notes: query => ["Welcome.md", "Plans/Trip.md", "Journal.md"].filter(path => path.toLowerCase().includes(query.toLowerCase())),
+    choose: async path => { calls.push(["choose", path]); return options.choose !== false; },
+    pinHint: options.pinHint,
   });
   overlay.setNativeAvailability(true, true);
   const recovery = dom.label(root, "Show PopNote controls"), bar = dom.label(root, "PopNote controls");
   const pin = dom.label(root, "Keep PopNote on top"), opacity = dom.label(root, "Window opacity");
   const range = dom.label(root, "Opacity");
-  return { ...dom, overlay, root, parent, note, bar, recovery, pin, opacity, range, calls,
+  const noteButton = dom.label(root, "Choose the note to show"), search = dom.label(root, "Find a note");
+  return { ...dom, overlay, root, parent, note, bar, recovery, pin, opacity, range, calls, noteButton, search,
+    results: () => dom.all(root).filter(element => element.className === "popnote-overlay-result"),
     release() { allowed = false; },
     moveToNote() { fire(note, "pointermove"); },
   };
@@ -101,4 +108,45 @@ test("recovery does not focus an inactive window, and disposal removes listeners
   h.overlay.dispose(); h.overlay.dispose(); h.overlay.recover(true);
   assert.equal(h.root.isConnected, false); assert.equal(h.listenerCount(), 0);
   assert.deepEqual(h.parent.children, [h.note]); assert.deepEqual(h.calls, []);
+});
+
+test("the note picker lists notes, filters as you type, and Enter chooses the first match", async () => {
+  const h = host(); h.fire(h.recovery, "click");
+  assert.equal(h.noteButton.getAttribute("aria-expanded"), "false");
+  h.fire(h.noteButton, "click");
+  assert.equal(h.noteButton.getAttribute("aria-expanded"), "true");
+  assert.deepEqual(h.results().map(item => item.dataset.path), ["Welcome.md", "Plans/Trip.md", "Journal.md"]);
+  assert.equal(h.results()[0].textContent, "Welcome");
+  assert.equal(h.document.activeElement, h.search);
+  h.search.value = "trip"; h.fire(h.search, "input");
+  assert.deepEqual(h.results().map(item => item.dataset.path), ["Plans/Trip.md"]);
+  h.fire(h.search, "keydown", { key: "Enter" }); await settle();
+  assert.deepEqual(h.calls, [["choose", "Plans/Trip.md"]]);
+  assert.equal(h.noteButton.getAttribute("aria-expanded"), "false");
+});
+
+test("clicking a result chooses it, and a failed choice keeps the picker open", async () => {
+  const h = host({ choose: false }); h.fire(h.recovery, "click"); h.fire(h.noteButton, "click");
+  h.fire(h.results()[1], "click"); await settle();
+  assert.deepEqual(h.calls, [["choose", "Plans/Trip.md"]]);
+  assert.equal(h.noteButton.getAttribute("aria-expanded"), "true");
+  h.search.value = "zzz"; h.fire(h.search, "input");
+  assert.equal(h.results().length, 0);
+});
+
+test("the note picker and the opacity slider never open together, and Escape closes the picker first", () => {
+  const h = host(); h.fire(h.recovery, "click");
+  h.fire(h.opacity, "click"); assert.equal(h.opacity.getAttribute("aria-expanded"), "true");
+  h.fire(h.noteButton, "click");
+  assert.equal(h.opacity.getAttribute("aria-expanded"), "false");
+  assert.equal(h.noteButton.getAttribute("aria-expanded"), "true");
+  h.fire(h.search, "keydown", { key: "Escape" });
+  assert.equal(h.noteButton.getAttribute("aria-expanded"), "false");
+  assert.equal(h.bar.hidden, false);
+  assert.equal(h.document.activeElement, h.noteButton);
+});
+
+test("the pin hint is added to the Pin tooltip", () => {
+  const h = host({ pinHint: "Win+Tab shows it on every desktop" }); h.overlay.setNativeAvailability(true, true);
+  assert.equal(h.pin.title, "Keep PopNote on top. Win+Tab shows it on every desktop");
 });

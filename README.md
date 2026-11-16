@@ -18,7 +18,8 @@ A macOS restart and shortcut registration issue remains open.
 
 ## Open your first PopNote
 
-1. In the disposable vault, open a note and run **PopNote: Use current note** once.
+1. Enable PopNote. There is nothing to prepare: the first time you summon it, it
+   shows the note you have in front (or the last one you opened).
 2. Press **Ctrl+Alt+P** on Windows or **Command+Option+P** on macOS to summon
    or hide the pop-out. If the shortcut is unavailable, use **PopNote: Toggle window** from the command palette.
    **Choosing a shortcut:** type it in Settings -> PopNote without spaces, such
@@ -26,10 +27,35 @@ A macOS restart and shortcut registration issue remains open.
    Mac use `Command+Option+P`. Owner report: `Win + Q` brought PopNote up and hid
    it once, then stopped responding, and `Super+Q` worked repeatedly. Whether the
    spelling or something else caused the failure was not established.
-3. Open **⋯** to reveal Pin and the opacity control. Select the displayed
-   percentage to adjust opacity in 1% steps on supported desktops.
+3. Open **⋯** in the window's tab strip to reveal **Note**, **Pin** and the
+   opacity control. **Note** opens a search box: type part of a note's name or
+   folder, then press Enter or click a result to show that note in the same
+   window. The choice is remembered. Select the displayed percentage to adjust
+   opacity. Pin and opacity are remembered too.
+4. Optional, in Settings -> PopNote: **Show on all desktops** (macOS Spaces),
+   **Tray icon** (off by default; a click shows or hides PopNote) and **Debug
+   logging** (off by default; writes lifecycle events to the developer console
+   and stores nothing). **PopNote: Use current note** still switches the window
+   to the note you are looking at. On Windows, PopNote cannot pin itself to every
+   virtual desktop: press Win+Tab, right-click the PopNote window and choose
+   **Show this window on all desktops**. A one-time tip says so on first use.
 
 ## Current state
+
+Review follow-up, 2026-11-15: the note picker, saved pin, settings for all
+desktops, tray and debug logging are in, and the minimum window width is now 340
+px. Restart diagnostics used to write every event to the console and to
+`localStorage`; they are now off unless Debug logging is on, and nothing is ever
+stored. The build and all 104 automated checks pass. In the isolated Kali test
+vault (Obsidian 1.15.0, WSLg) the new build was driven from its command line:
+with no saved note the first summon opened the note in front and saved it; the
+picker listed recent notes, filtered on "trip" and switched the open window to
+that note in place; at the 340 px minimum Note, Pin, the opacity value and the
+controls button did not overlap, the strip kept a 32 px gap and the picker
+stayed inside the window; Pin and saved settings worked; the tray icon was
+created and destroyed without error (whether that desktop shows a tray icon was
+not observed). This was read from page layout and Electron state, not
+screenshots, and the new build has not been run on Windows or a Mac yet.
 
 Milestone 2 Stage 1 is implemented with the narrow-window, close-button and
 new-tab fixes. The build and all 81 automated checks passed. On Windows with

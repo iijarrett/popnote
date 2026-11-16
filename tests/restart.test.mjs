@@ -131,7 +131,7 @@ function host(initial = {}, options = {}) {
   }
   const files = new Map([[file.path, file]]);
   const newTabCommand = { checkCallback: () => true };
-  const app = { workspace, commands: { findCommand: () => newTabCommand }, vault: { getName: () => "test_vault", getAbstractFileByPath: path => files.get(path) ?? null } };
+  const app = { workspace, commands: { findCommand: () => newTabCommand }, vault: { getName: () => "test_vault", getAbstractFileByPath: path => files.get(path) ?? null, getMarkdownFiles: () => [...files.values()] } };
   class Plugin {
     constructor() { this.app = app; }
     loadData = async () => structuredClone(disk);
@@ -156,8 +156,18 @@ function host(initial = {}, options = {}) {
       callback(slider); return this;
     }
   }
+  const trays = [];
+  class Tray {
+    constructor(image) { this.image = image; this.handlers = new Map(); this.destroyed = false; trays.push(this); }
+    setToolTip(tip) { this.tip = tip; }
+    on(name, handler) { this.handlers.set(name, handler); }
+    destroy() { this.destroyed = true; }
+    isDestroyed() { return this.destroyed; }
+  }
+  const nativeImage = { createFromDataURL: url => ({ url, resize() { return this; }, setTemplateImage(value) { this.template = value; } }) };
   const remote = {
     process: { pid: 123 }, BrowserWindow: { getAllWindows: () => windows },
+    ...(options.tray === false ? {} : { Tray, nativeImage }),
     screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 2000, height: 1200 } }) },
     globalShortcut: {
       register: (key, callback) => { if (options.refuse?.(key) || keys.has(key)) return false; keys.set(key, callback); return true; },
@@ -172,7 +182,7 @@ function host(initial = {}, options = {}) {
       if (name === "obsidian") return {
         Plugin, PluginSettingTab: class {}, Setting, TFile, WorkspaceWindow, apiVersion: "1.15.0",
         Notice: class { constructor(message) { notices.push(message); } },
-        Platform: { isDesktop: options.desktop !== false, isMacOS: options.macOS === true, isLinux: false },
+        Platform: { isDesktop: options.desktop !== false, isMacOS: options.macOS === true, isLinux: false, isWin: options.windows === true },
       };
       if (name === "electron") return { remote };
       throw Error(name);
@@ -191,7 +201,7 @@ function host(initial = {}, options = {}) {
     await pending;
   };
   return {
-    plugin, writes, logs, notices, commands, keys, windows, opened, files, storage, sliders, toggles, leaves,
+    plugin, writes, logs, notices, commands, keys, windows, opened, files, storage, sliders, toggles, leaves, trays,
     async enableAgain() { const next = new module.exports.default(); await next.onload(); return next; },
     mix(leaf = leaves[0]) {
       const ordinary = { id: `ordinary-${leaves.length}`, getContainer: () => leaf.getContainer(),
@@ -287,22 +297,36 @@ test("save errors are reported and do not poison later saves", async () => {
   assert.equal(h.disk().shortcut, "Control+Alt+O");
 });
 
-test("restart diagnostics survive a new instance and include lifecycle and save completion", async () => {
-  const storage = new Map(); const h = host(settings, { storage });
-  await h.plugin.onload(); h.ready(); h.commands.get("use-current-note")(); await settle();
-  h.plugin.onunload(); await settle();
-  const restarted = host(h.disk(), { storage }); await restarted.plugin.onload(); restarted.ready();
-  const history = storage.get("popnote-restart-trace:test_vault") ?? "";
+test("debug logging is off by default and stores nothing; turned on it logs lifecycle and save completion", async () => {
+  const quiet = host(settings);
+  await quiet.plugin.onload(); quiet.ready(); quiet.commands.get("use-current-note")(); await settle();
+  quiet.plugin.onunload(); await settle();
+  assert.equal(quiet.logs.filter(line => line.includes("[PopNote restart]")).length, 0);
+  assert.equal(quiet.storage.size, 0);
+  const loud = host({ ...settings, debug: true });
+  await loud.plugin.onload(); loud.ready(); loud.commands.get("use-current-note")(); await settle();
+  loud.plugin.onunload(); await settle();
   for (const event of ["plugin-load", "layout-ready", "save-complete", "plugin-unload"])
-    assert.ok(history.includes(event), `missing ${event}`);
-  assert.ok(restarted.logs.some(line => line.includes("settings-loaded") && line.includes("0.6")));
+    assert.ok(loud.logs.some(line => line.includes(event)), `missing ${event}`);
+  assert.equal(loud.storage.size, 0);
+});
+
+test("debug logging can be switched on from settings and is remembered", async () => {
+  const h = host(settings); await h.plugin.onload();
+  h.plugin.setDebug(true); await settle();
+  assert.equal(h.disk().debug, true);
+  assert.ok(h.logs.some(line => line.includes("save-requested")));
+  const restarted = host(h.disk()); await restarted.plugin.onload();
+  assert.ok(restarted.logs.some(line => line.includes("plugin-load")));
 });
 
 test("malformed settings and mobile remain safe", async () => {
   for (const data of [null, [], { notePath: 7, shortcut: {}, opacity: "bad", windowBounds: {} }]) {
     const h = host(data); await h.plugin.onload();
     assert.ok(h.keys.has("Control+Alt+P")); assert.equal(h.opened.length, 0);
-    h.keys.get("Control+Alt+P")(); await settle(); assert.equal(h.opened.length, 0);
+    // No note was ever chosen, so the note in front opens and is remembered.
+    h.keys.get("Control+Alt+P")(); await settle(); assert.deepEqual(h.opened, ["notes/A.md"]);
+    assert.equal(h.disk().notePath, "notes/A.md");
   }
   const mobile = host(settings, { desktop: false }); await mobile.plugin.onload();
   assert.equal(mobile.keys.size, 0); assert.equal(mobile.logs.length, 0);
@@ -323,7 +347,7 @@ test("a saved shortcut refused at startup is retained without startup writes or 
 });
 
 test("layout events never create or clean up a restored floating window", async () => {
-  const h = host(settings); await h.plugin.onload();
+  const h = host({ ...settings, debug: true }); await h.plugin.onload();
   // Obsidian restores an independent floating leaf, outside plugin ownership.
   await h.plugin.app.workspace.openPopoutLeaf();
   h.ready(); h.event("window-open"); h.event("window-close");
@@ -334,7 +358,7 @@ test("layout events never create or clean up a restored floating window", async 
 });
 
 test("beforeunload flushes pending bounds and records the pending write", async () => {
-  const h = host(settings); await h.plugin.onload();
+  const h = host({ ...settings, debug: true }); await h.plugin.onload();
   h.keys.get("Control+Alt+Shift+P")(); await settle();
   h.windows[0].bounds = { x: 200, y: 210, width: 550, height: 460 };
   h.windows[0].emit("move"); h.event("beforeunload"); await settle();
@@ -366,7 +390,7 @@ test("renderer shutdown releases only its own shortcut across repeated Mac resta
 test("a stale startup registration is reclaimed, but Apply never takes a foreign shortcut", async () => {
   const stale = () => {};
   const keys = new Map([["Command+Option+P", stale], ["Command+Option+O", stale]]);
-  const h = host({ ...settings, shortcut: "Command+Option+P" }, { keys, macOS: true });
+  const h = host({ ...settings, shortcut: "Command+Option+P", debug: true }, { keys, macOS: true });
   await h.plugin.onload();
   assert.notEqual(keys.get("Command+Option+P"), stale);
   assert.ok(h.logs.some(line => line.includes('"event":"shortcut-reclaimed"')));
@@ -420,14 +444,6 @@ test("Obsidian quit waits for a changed bounds save already in flight", async ()
 });
 
 
-test("diagnostic storage failure does not block saving or summoning", async () => {
-  const storage = { get() { throw Error("storage blocked"); }, set() { throw Error("storage blocked"); } };
-  const h = host(settings, { storage }); await h.plugin.onload();
-  h.keys.get("Control+Alt+Shift+P")(); await settle();
-  h.sliders[0](0.5); await settle();
-  assert.equal(h.disk().opacity, 0.5); assert.deepEqual(h.opened, ["notes/A.md"]);
-});
-
 const guardedSettings = { ...settings, opacity: 0.4 };
 
 test("mixed tabs release controls/native effects before shortcut, callbacks or serialization can act", async () => {
@@ -448,14 +464,15 @@ test("mixed tabs release controls/native effects before shortcut, callbacks or s
   assert.equal(h.windows[1].alpha, 0.4);
   h.sliders[0](0.9); h.toggles[0](false); staleBounds(); h.tick(); await settle();
   assert.equal(h.windows[1].alpha, 0.4); assert.equal(oldWindow.alpha, 1);
-  assert.deepEqual(h.disk(), guardedSettings); assert.equal(h.writes.length, 0);
+  assert.deepEqual(h.disk(), { ...guardedSettings, pinned: true, allSpaces: false, tray: false, debug: false, helpShown: false });
+  assert.equal(h.writes.length, 1, "only the remembered pin was saved");
   h.plugin.onunload(); await settle();
   assert.equal(owned.detaches, 0); assert.equal(oldWindow.destroyed, false);
   assert.equal(h.windows[1].destroyed, true); assert.equal(h.keys.size, 0);
   const enabled = await h.enableAgain(); assert.equal(h.windows.length, 2);
   h.sliders[0](0.8); staleBounds(); h.keys.get(settings.shortcut)(); await settle();
   assert.equal(h.windows.length, 3); assert.equal(h.windows[2].alpha, 0.4);
-  assert.equal(h.writes.length, 0); enabled.onunload();
+  assert.equal(h.writes.length, 1); enabled.onunload();
 });
 
 for (const destination of ["main", "ordinary pop-out"]) {
@@ -605,4 +622,101 @@ test("native new-tab inputs keep window opacity, layout ownership, and the share
   assert.equal(win.alpha, 1);
   assert.equal(group.children.length, 3);
   assert.equal(win.destroyed, false);
+});
+
+function chooserFor(h, index = 0) {
+  const dom = h.windows[index].dom, root = h.controls(index);
+  return { dom, root, note: dom.label(root, "Choose the note to show"), search: dom.label(root, "Find a note"),
+    results: () => dom.all(root).filter(element => element.className === "popnote-overlay-result") };
+}
+
+test("the note picker switches the open window to another note and remembers it", async () => {
+  const h = host(settings); h.files.set("notes/B.md", new TFile("notes/B.md"));
+  await h.plugin.onload(); h.keys.get(settings.shortcut)(); await settle();
+  const picker = chooserFor(h);
+  picker.dom.fire(picker.dom.label(picker.root, "Show PopNote controls"), "click");
+  picker.dom.fire(picker.note, "click");
+  assert.deepEqual(picker.results().map(item => item.dataset.path).sort(), ["notes/A.md", "notes/B.md"]);
+  picker.search.value = "b"; picker.dom.fire(picker.search, "input");
+  assert.deepEqual(picker.results().map(item => item.dataset.path), ["notes/B.md"]);
+  picker.dom.fire(picker.results()[0], "click"); await settle();
+  assert.deepEqual(h.opened, ["notes/A.md", "notes/B.md"]);
+  assert.equal(h.windows.length, 1, "the same window is reused");
+  assert.equal(h.disk().notePath, "notes/B.md");
+  const restarted = host(h.disk()); restarted.files.set("notes/B.md", new TFile("notes/B.md"));
+  await restarted.plugin.onload(); restarted.keys.get(settings.shortcut)(); await settle();
+  assert.deepEqual(restarted.opened, ["notes/B.md"]);
+});
+
+test("choosing a note that is not in the vault shows a Notice and changes nothing", async () => {
+  const h = host(settings); await h.plugin.onload(); h.keys.get(settings.shortcut)(); await settle();
+  const picker = chooserFor(h);
+  picker.dom.fire(picker.dom.label(picker.root, "Show PopNote controls"), "click");
+  picker.dom.fire(picker.note, "click");
+  h.files.delete("notes/A.md");
+  picker.dom.fire(picker.results()[0], "click"); await settle();
+  assert.ok(h.notices.some(value => value.includes("not a note in this vault")));
+  assert.equal(h.disk().notePath, "notes/A.md");
+});
+
+test("Use current note switches an already open window without closing it", async () => {
+  const h = host(settings); h.files.set("notes/B.md", new TFile("notes/B.md"));
+  await h.plugin.onload(); h.keys.get(settings.shortcut)(); await settle();
+  h.plugin.app.workspace.getActiveFile = () => h.files.get("notes/B.md");
+  h.commands.get("use-current-note")(); await settle();
+  assert.deepEqual(h.opened, ["notes/A.md", "notes/B.md"]); assert.equal(h.windows.length, 1);
+  assert.equal(h.disk().notePath, "notes/B.md");
+});
+
+test("pin is remembered across restarts", async () => {
+  const h = host(settings); await h.plugin.onload(); h.keys.get(settings.shortcut)(); await settle();
+  h.toggles[0](true); await settle();
+  assert.equal(h.windows[0].pinned, true); assert.equal(h.disk().pinned, true);
+  h.plugin.onunload(); await settle();
+  const restarted = host(h.disk()); await restarted.plugin.onload(); restarted.keys.get(settings.shortcut)(); await settle();
+  assert.equal(restarted.windows[0].pinned, true);
+});
+
+test("the tray icon is off by default, toggles the window on click, and is destroyed on disable and unload", async () => {
+  const off = host(settings); await off.plugin.onload();
+  assert.equal(off.trays.length, 0);
+  assert.equal(off.plugin.setTray(true), true); await settle();
+  assert.equal(off.trays.length, 1); assert.equal(off.disk().tray, true);
+  const [tray] = off.trays;
+  tray.handlers.get("click")(); await settle();
+  assert.deepEqual(off.opened, ["notes/A.md"]);
+  tray.handlers.get("click")(); await settle();
+  assert.equal(off.windows[0].visible, false);
+  assert.equal(off.plugin.setTray(false), true); await settle(); assert.equal(tray.destroyed, true); assert.equal(off.disk().tray, false);
+  off.plugin.setTray(true); const second = off.trays[1];
+  off.plugin.onunload(); await settle();
+  assert.equal(second.destroyed, true);
+});
+
+test("a saved tray setting is restored at startup and released when the renderer shuts down", async () => {
+  const h = host({ ...settings, tray: true }); await h.plugin.onload();
+  assert.equal(h.trays.length, 1);
+  h.event("beforeunload"); await settle();
+  assert.equal(h.trays[0].destroyed, true);
+});
+
+test("a missing Tray API turns only the tray off, with a Notice", async () => {
+  const h = host(settings, { tray: false }); await h.plugin.onload();
+  assert.equal(h.plugin.setTray(true), false); await settle();
+  assert.equal(h.disk().tray, false);
+  assert.ok(h.notices.some(value => value.includes("Tray icon disabled")));
+  assert.ok(h.keys.has(settings.shortcut));
+});
+
+test("the all-desktops setting is saved, and the first-run tip appears once on Windows only", async () => {
+  const h = host(settings); await h.plugin.onload();
+  h.plugin.setAllSpaces(true); await settle();
+  assert.equal(h.disk().allSpaces, true);
+  const win = host(settings, { windows: true }); await win.plugin.onload();
+  win.keys.get(settings.shortcut)(); await settle();
+  assert.equal(win.notices.filter(value => value.includes("Win+Tab")).length, 1);
+  assert.equal(win.disk().helpShown, true);
+  win.keys.get(settings.shortcut)(); win.keys.get(settings.shortcut)(); await settle();
+  assert.equal(win.notices.filter(value => value.includes("Win+Tab")).length, 1);
+  assert.equal(h.notices.filter(value => value.includes("Win+Tab")).length, 0);
 });

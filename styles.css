@@ -42,6 +42,51 @@
   inline-size: 100%;
 }
 
+.popnote-overlay-notes {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.popnote-overlay-in-tab-header .popnote-overlay-notes {
+  inline-size: min(20rem, calc(100vw - var(--size-4-4)));
+  max-block-size: calc(100vh - var(--header-height) - var(--size-4-4));
+}
+
+.popnote-overlay-search {
+  inline-size: 100%;
+}
+
+.popnote-overlay-results {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow-y: auto;
+}
+
+.popnote-overlay-result {
+  padding: var(--size-4-1) var(--size-4-2);
+  overflow: hidden;
+  color: var(--text-normal);
+  font: inherit;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-s);
+  box-shadow: none;
+}
+
+.popnote-overlay-result:hover,
+.popnote-overlay-result:focus-visible {
+  background: var(--background-modifier-hover);
+}
+
+.popnote-overlay-empty {
+  padding: var(--size-4-1) var(--size-4-2);
+  color: var(--text-muted);
+}
+
 /* Keep a grab area: the tab strip is how the window is moved, so its empty part never shrinks away. */
 .popnote-overlay-host .workspace-tab-header-spacer {
   flex: 1 0 var(--size-4-8);

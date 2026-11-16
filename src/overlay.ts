@@ -2,6 +2,12 @@ type OverlayActions = {
   allowed: () => boolean;
   pin: (value: boolean) => boolean;
   opacity: (value: number) => boolean;
+  /** Vault note paths matching what was typed, best first; an empty query returns recent notes. */
+  notes: (query: string) => string[];
+  /** Shows the note in the window. Resolves false if it could not. */
+  choose: (path: string) => Promise<boolean>;
+  /** Extra help for the Pin button, such as how to show the window on every desktop. */
+  pinHint?: string;
 };
 
 /** Owns only its controls and DOM listeners; native behavior stays in native.ts. */
@@ -10,14 +16,19 @@ export class OverlayControls {
   private recovery: HTMLButtonElement;
   private bar: HTMLElement;
   private title: HTMLElement;
+  private noteButton: HTMLButtonElement;
   private pinButton: HTMLButtonElement;
   private opacityButton: HTMLButtonElement;
   private panel: HTMLElement;
+  private notePanel: HTMLElement;
+  private search: HTMLInputElement;
+  private results: HTMLElement;
   private range: HTMLInputElement;
   private output: HTMLElement;
   private disposed = false;
   private expanded = false;
   private panelOpen = false;
+  private notesOpen = false;
   private returnFocus: HTMLElement | null = null;
   private cleanup: Array<() => void> = [];
 
@@ -37,6 +48,7 @@ export class OverlayControls {
     drag.title = "Drag to move window. The standard title bar remains available.";
     drag.setAttribute("aria-hidden", "true");
     this.title = this.element("span", "popnote-overlay-note", this.bar);
+    this.noteButton = this.button("Note", "Choose the note to show", this.bar);
     this.setNote(note);
     this.pinButton = this.button("Pin", "Keep PopNote on top", this.bar);
     this.opacityButton = this.button("", "Window opacity", this.bar);
@@ -56,6 +68,17 @@ export class OverlayControls {
     this.range.setAttribute("aria-label", "Opacity");
     label.htmlFor = this.range.id;
     this.output = this.element("output", "popnote-overlay-value", this.panel);
+    this.notePanel = this.element("div", "popnote-overlay-panel popnote-overlay-notes", this.bar);
+    this.notePanel.id = `${id}-notes`;
+    this.notePanel.setAttribute("role", "group");
+    this.notePanel.setAttribute("aria-label", "Choose note");
+    this.noteButton.setAttribute("aria-controls", this.notePanel.id);
+    this.search = this.element("input", "popnote-overlay-search", this.notePanel);
+    this.search.type = "search";
+    this.search.placeholder = "Find a note";
+    this.search.setAttribute("aria-label", "Find a note");
+    this.results = this.element("div", "popnote-overlay-results", this.notePanel);
+    this.results.setAttribute("role", "listbox");
     this.pinButton.disabled = true;
     this.range.disabled = true;
     this.updateValues();
@@ -74,10 +97,11 @@ export class OverlayControls {
       if ((event as KeyboardEvent).key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      if (this.panelOpen) {
-        this.panelOpen = false;
+      if (this.panelOpen || this.notesOpen) {
+        const note = this.notesOpen;
+        this.panelOpen = this.notesOpen = false;
         this.render();
-        this.opacityButton.focus();
+        (note ? this.noteButton : this.opacityButton).focus();
       } else {
         this.setExpanded(false);
         const target = this.returnFocus;
@@ -87,8 +111,44 @@ export class OverlayControls {
     });
     this.listen(this.opacityButton, "click", () => {
       this.panelOpen = !this.panelOpen;
+      this.notesOpen = false;
       this.render();
       if (this.panelOpen) this.range.focus();
+    });
+    this.listen(this.noteButton, "click", () => {
+      this.notesOpen = !this.notesOpen;
+      this.panelOpen = false;
+      if (this.notesOpen) {
+        this.search.value = "";
+        this.showResults();
+      }
+      this.render();
+      if (this.notesOpen) this.search.focus();
+    });
+    this.listen(this.search, "input", () => this.showResults());
+    this.listen(this.search, "keydown", (event) => {
+      const key = (event as KeyboardEvent).key;
+      if (key === "Enter") {
+        event.preventDefault();
+        const first = this.results.querySelector("button");
+        if (first) void this.choose(first.dataset.path ?? "");
+      } else if (key === "ArrowDown") {
+        event.preventDefault();
+        this.results.querySelector("button")?.focus();
+      }
+    });
+    this.listen(this.results, "keydown", (event) => {
+      const key = (event as KeyboardEvent).key;
+      if (key !== "ArrowDown" && key !== "ArrowUp") return;
+      event.preventDefault();
+      const items = Array.from(this.results.querySelectorAll("button"));
+      const next = items.indexOf(this.document.activeElement as HTMLButtonElement) + (key === "ArrowDown" ? 1 : -1);
+      if (next < 0) this.search.focus();
+      else items[Math.min(next, items.length - 1)]?.focus();
+    });
+    this.listen(this.results, "click", (event) => {
+      const button = (event.target as Element | null)?.closest?.("button");
+      if (button) void this.choose(button.dataset.path ?? "");
     });
     this.listen(this.pinButton, "click", () => {
       if (this.pinButton.disabled) return;
@@ -103,7 +163,7 @@ export class OverlayControls {
         if (this.actions.opacity(value)) this.opacity = value;
         else {
           this.range.disabled = true;
-          this.panelOpen = false;
+          this.panelOpen = this.notesOpen = false;
           this.render();
           this.recovery.focus();
         }
@@ -149,6 +209,32 @@ export class OverlayControls {
     }
   }
 
+  private showResults(): void {
+    this.results.replaceChildren();
+    for (const path of this.actions.notes(this.search.value)) {
+      const item = this.element("button", "popnote-overlay-result", this.results);
+      item.type = "button";
+      item.dataset.path = path;
+      item.setAttribute("role", "option");
+      item.title = path;
+      item.textContent = path.replace(/\.md$/i, "");
+    }
+    if (!this.results.firstChild) {
+      const empty = this.element("div", "popnote-overlay-empty", this.results);
+      empty.textContent = "No matching notes";
+    }
+  }
+
+  private async choose(path: string): Promise<void> {
+    if (!path || !this.allowed()) return;
+    let chosen = false;
+    try { chosen = await this.actions.choose(path); } catch { chosen = false; }
+    if (this.disposed || !chosen) return;
+    this.notesOpen = false;
+    this.render();
+    this.noteButton.focus();
+  }
+
   private updateValues(): void {
     const percent = `${Math.round(this.opacity * 100)}%`;
     if (Number(this.range.value) !== this.opacity) this.range.value = String(this.opacity);
@@ -158,26 +244,30 @@ export class OverlayControls {
     this.opacityButton.title = this.range.disabled ? "Opacity unavailable" : "Window opacity";
     this.output.textContent = percent;
     this.pinButton.setAttribute("aria-pressed", String(this.pinned));
-    this.pinButton.title = this.pinButton.disabled ? "Pin unavailable" : "Keep PopNote on top";
+    this.pinButton.title = this.pinButton.disabled ? "Pin unavailable"
+      : ["Keep PopNote on top", this.actions.pinHint].filter(Boolean).join(". ");
     this.range.title = this.range.disabled ? "Opacity unavailable" : "Window opacity";
   }
 
   private render(): void {
     this.bar.hidden = !this.expanded;
     this.panel.hidden = !this.panelOpen;
+    this.notePanel.hidden = !this.notesOpen;
+    this.noteButton.setAttribute("aria-expanded", String(this.notesOpen));
     this.recovery.setAttribute("aria-expanded", String(this.expanded));
     this.opacityButton.setAttribute("aria-expanded", String(this.panelOpen));
   }
 
   private setExpanded(expanded: boolean): void {
     this.expanded = expanded;
-    if (!expanded) this.panelOpen = false;
+    if (!expanded) this.panelOpen = this.notesOpen = false;
     this.render();
   }
 
   setNote(note: string): void {
     this.title.textContent = note;
     this.title.title = note;
+    this.noteButton.title = `Showing ${note}. Choose another note`;
   }
 
   setNativeAvailability(pin: boolean, opacity: boolean): void {

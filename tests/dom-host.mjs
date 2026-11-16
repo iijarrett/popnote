@@ -20,13 +20,23 @@ export function domHost(onListen = () => {}) {
     constructor(tag, owner) {
       super(); this.tagName = tag.toUpperCase(); this.ownerDocument = owner;
       this.children = []; this.attributes = new Map(); this.className = ""; this.textContent = "";
-      this.hidden = false; this.disabled = false; this.value = ""; this.style = {};
+      this.hidden = false; this.disabled = false; this.value = ""; this.style = {}; this.dataset = {};
       this.classList = {
         contains: name => this.className.split(/\s+/).includes(name),
         add: name => { if (!this.classList.contains(name)) this.className = `${this.className} ${name}`.trim(); },
         remove: name => { this.className = this.className.split(/\s+/).filter(value => value !== name).join(" "); },
       };
     }
+    get firstChild() { return this.children[0] ?? null; }
+    replaceChildren() { for (const child of [...this.children]) child.remove(); }
+    // Tag-name selectors only, which is all the plugin uses.
+    querySelectorAll(tag) {
+      const found = [];
+      const walk = node => { for (const child of node.children) { if (child.tagName === tag.toUpperCase()) found.push(child); walk(child); } };
+      walk(this); return found;
+    }
+    querySelector(tag) { return this.querySelectorAll(tag)[0] ?? null; }
+    closest(tag) { for (let node = this; node; node = node.parentNode) if (node.tagName === tag.toUpperCase()) return node; return null; }
     get isConnected() { return this.connected !== false && (!!this.parentNode?.isConnected || this.parentNode === document); }
     set isConnected(value) { this.connected = value; }
     get parentElement() { return this.parentNode instanceof Element ? this.parentNode : null; }

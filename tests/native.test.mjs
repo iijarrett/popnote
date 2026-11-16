@@ -56,9 +56,9 @@ test("release restores only applied values on the originally bound window", () =
 
 test("a minimum window size is applied, small saved bounds are raised to it, and release undoes it", () => {
   const h = host(); h.bind(); h.native.minimumSize();
-  assert.deepEqual(h.original.min, [300, 160]);
+  assert.deepEqual(h.original.min, [340, 160]);
   h.native.restoreBounds({ x: 80, y: 90, width: 120, height: 50 });
-  assert.equal(h.original.bounds.width, 300); assert.equal(h.original.bounds.height, 160);
+  assert.equal(h.original.bounds.width, 340); assert.equal(h.original.bounds.height, 160);
   h.native.release();
   assert.deepEqual(h.original.min, [0, 0]); assert.deepEqual(h.unrelated.min, undefined);
   assert.deepEqual(h.notices, []);

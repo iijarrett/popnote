@@ -183,6 +183,17 @@ export class PopNoteWindow {
     return typeof file === "string" ? file : leaf.view.getDisplayText?.();
   }
 
+  /** Shows another note in the window's current PopNote tab. */
+  async showNote(file: TFile): Promise<boolean> {
+    if (!this.isOpen()) return false;
+    const group = this.tabGroup;
+    const leaf = group?.children[group.currentTab] ?? this.leaf!;
+    if (!this.ownedLeaves.has(leaf)) return false;
+    try { await leaf.openFile(file); }
+    catch { return false; }
+    return this.isOpen();
+  }
+
   async open(file: TFile): Promise<Document> {
     if (this.isOpen()) return this.document!;
     this.release("previous pop-out is unavailable");
