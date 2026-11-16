@@ -5,6 +5,28 @@ first section; older sections keep the names and behavior of the version they te
 
 ## Current state
 
+Full run of the current build (main.js c5ce6fa7...), 2026-11-16, branch mac-testing.
+Automated: type check clean, 116 of 116 checks pass (including the five installed-
+method ones on Obsidian 1.15.1); a fresh clone of the branch builds the identical
+main.js. Windows 11, Obsidian 1.15.1, test vault, through the Obsidian command line
+with the scripts in tests/live: scenario.js (picker, in-place switch, six window
+widths with no overlap and a 32 px or larger drag gap, minimum width 340, picker panel
+inside the window, pin, opacity 0.6, hide and show with the same window), tray.js
+(icon created, menu of six entries, click opens then hides, removed when off) and
+shortcut.js all pass. Real input on the same machine: Ctrl+Alt+P hid, showed and hid
+the same window; real left clicks on the tray icon opened, hid and showed it; every
+right-click menu entry worked from the real menu (Keep on top on and off, Opacity 60
+and 100, Switch note, Find note with typing landing in the search box, Slider with
+the slider focused); a real mouse drag widened the window and a long drag the other
+way stopped at the 340 px minimum. A first run of tray.js showed two failures that
+were the script's: it assumed a closed window and mis-compared the ellipsis, so the
+script now closes the window first. Linux, Kali under WSLg, Obsidian 1.15.0, same
+three scripts: all pass; window opacity is not applied there (the control is
+disabled), the tray icon reports zero bounds (WSLg has no tray area, so it cannot be
+seen), and the real shortcut keypress and real tray click could not be sent into
+WSLg. Not run: macOS (no access from this session), Linux outside WSLg, and the
+strip drag, which was confirmed by the owner earlier.
+
 Tray search and slider, 2026-11-16, Windows. Native tray menus cannot hold a text
 box or a slider, so the menu has "Find note..." and "Opacity > Slider..." entries
 that bring PopNote up (creating it if closed, showing it if hidden) with the note
