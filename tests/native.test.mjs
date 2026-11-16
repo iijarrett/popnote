@@ -9,7 +9,7 @@ const code = ts.transpileModule(readFileSync(new URL("../src/native.ts", import.
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 
-function host(pinFallbackLevel) {
+function host(pinFallbackLevel, mac = false) {
   const notices = [], listeners = new Map();
   const document = { title: "note" };
   let allowed = true;
@@ -20,6 +20,7 @@ function host(pinFallbackLevel) {
     getOpacity() { return this.alpha; }, setOpacity(value) { this.alpha = value; },
     isAlwaysOnTop() { return this.pinned; }, setAlwaysOnTop(value) { this.pinned = value; },
     isVisibleOnAllWorkspaces() { return this.spaces; }, setVisibleOnAllWorkspaces(value) { this.spaces = value; },
+    fullScreenable: true, isFullScreenable() { return this.fullScreenable; }, setFullScreenable(value) { this.fullScreenable = value; },
     isVisible() { return this.visible; }, isMinimized: () => false, isFocused: () => true,
     show() { this.visible = true; }, hide() { this.visible = false; }, restore() {}, focus() {},
     showInactive() { this.visible = true; },
@@ -36,7 +37,7 @@ function host(pinFallbackLevel) {
   vm.runInNewContext(code, {
     module, exports: module.exports, crypto: { randomUUID },
     require: name => name === "obsidian" ? {
-      Notice: class { constructor(message) { notices.push(message); } }, Platform: { isLinux: false },
+      Notice: class { constructor(message) { notices.push(message); } }, Platform: { isLinux: false, isMacOS: mac },
     } : { remote },
   });
   const native = new module.exports.PopNoteNative(() => {}, undefined, pinFallbackLevel);
@@ -171,4 +172,27 @@ test("opacity reports failure when the compositor ignores the value", () => {
   assert.equal(h.original.alpha, 1);
   assert.ok(h.notices.some(message => message.includes("Opacity disabled")));
   assert.equal(h.native.pin(true), true);
+});
+
+test("on macOS the window cannot become a full-screen window, and release undoes it; elsewhere nothing changes", () => {
+  const h = host(undefined, true); h.bind(); h.native.keepOutOfFullScreen();
+  assert.equal(h.original.fullScreenable, false);
+  h.native.release(); assert.equal(h.original.fullScreenable, true); assert.deepEqual(h.notices, []);
+  const other = host(); other.bind(); other.native.keepOutOfFullScreen();
+  assert.equal(other.original.fullScreenable, true);
+});
+
+test("a missing full-screen API disables only that feature on macOS", () => {
+  const h = host(undefined, true); delete h.original.setFullScreenable; h.bind(); h.native.keepOutOfFullScreen();
+  assert.ok(h.notices.some(message => message.includes("Full screen guard")));
+  assert.equal(h.native.pin(true), true);
+});
+
+test("toggle reports what it did, so the caller can put the typing cursor in the note after a show", () => {
+  const h = host(); h.bind();
+  assert.equal(h.native.toggle(), "hidden"); assert.equal(h.original.visible, false);
+  assert.equal(h.native.toggle(), "shown"); assert.equal(h.original.visible, true);
+  h.original.isFocused = () => false;
+  assert.equal(h.native.toggle(), "focused");
+  assert.equal(h.native.toggle("hide-if-visible"), "hidden");
 });

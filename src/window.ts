@@ -182,6 +182,18 @@ export class PopNoteWindow {
     return typeof file === "string" ? file : leaf.view.getDisplayText?.();
   }
 
+  /** Puts the typing cursor in the note of the window's current tab, so typing works as soon as it is shown. */
+  focusEditor(): void {
+    if (!this.isOpen()) return;
+    const group = this.tabGroup;
+    const leaf = group?.children[group.currentTab] ?? this.leaf!;
+    try {
+      const editor = (leaf.view as { editor?: { focus?: () => void } }).editor;
+      if (typeof editor?.focus === "function") editor.focus();
+      else this.app.workspace.setActiveLeaf(leaf, { focus: true });
+    } catch { /* Focus is a convenience; the window is already shown. */ }
+  }
+
   /** Shows another note in the window's current PopNote tab. */
   async showNote(file: TFile): Promise<boolean> {
     if (!this.isOpen()) return false;
