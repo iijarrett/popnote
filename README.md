@@ -42,7 +42,9 @@ choose **Show this window on all desktops**.
 ## What has been tested
 
 Windows 11 (Obsidian 1.15.1) is tested the most. Linux was checked under WSLg only (window opacity is not applied
-there, so that control is disabled). macOS is being tested. See [TESTING.md](TESTING.md) for dated results and what is
+there, so that control is disabled). macOS (Apple Silicon, Obsidian 1.15.0) was tested with real shortcut, menu-bar icon and
+window input; Intel Macs, several desktops and a light menu bar are not yet confirmed. On a Mac, if a full-screen app is in front,
+the shortcut switches to PopNote's own desktop instead of floating over that app. See [TESTING.md](TESTING.md) for dated results and what is
 still unconfirmed. Native features (shortcut, tray, pin, opacity) use Electron access that Obsidian does not document;
 if one is unavailable PopNote turns just that feature off with a notice and keeps working.
 

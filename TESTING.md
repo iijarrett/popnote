@@ -26,7 +26,9 @@ visible but behind another window; now it hides only a focused window and otherw
 note. Checked live: with the main Obsidian window in front of PopNote, a real icon click brought PopNote to the front with the
 cursor in the note; the next click hid it and the one after showed it. Windows keeps hide-if-visible. Not tested: another app (not
 Obsidian) in front when the icon is clicked.
-Not tested: Switch note and Slider from the real menu; moving between several desktops (this Mac has one besides the
+Switch note (opened the window on the chosen note and saved it) and Slider… (opened the slider with the slider focused) were then
+checked from the real right-click menu and passed.
+Not tested: moving between several desktops (this Mac has one besides the
 full-screen one); the icon on a light menu bar; Intel Macs and other Macs; Obsidian 1.15.1. A normal Quit once left the
 Obsidian main process hanging for minutes (cause not found; it was force-quit and relaunched, and the shortcut worked
 afterwards), so a clean full quit and reopen is not confirmed. An extra ghost tray item appeared once after many
