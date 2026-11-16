@@ -34,7 +34,6 @@ This is a development preview and requires Obsidian 1.15.0 or newer.
   **Opacity** (presets, or **Slider…**), **Find note…** (opens the search box) and **Switch note** (your five most recent
   notes). Windows may place a new icon behind the **^**
   in the taskbar; drag it out to keep it visible. Some Linux desktops have no tray.
-- **Debug logging**: off by default; prints events to the developer console for troubleshooting. Stores nothing.
 
 On Windows, PopNote cannot pin itself to every virtual desktop. Press Win+Tab, right-click the PopNote window and
 choose **Show this window on all desktops**.

@@ -5,6 +5,11 @@ first section; older sections keep the names and behavior of the version they te
 
 ## Current state
 
+Debug logging removed, 2026-11-16, Windows: the Settings toggle, the `debug` stored value, the console log and the trace hooks
+in `main.ts`, `native.ts`, `window.ts` and `workspace-compat.ts` are gone; PopNote writes nothing to the console. A saved
+`debug` value in an old `data.json` is ignored and dropped on the next save. Type check and 118 of 118 automated checks pass
+on Windows (Obsidian 1.15.1 archive). The live checks on Windows and the macOS re-run for this build are recorded below once done.
+
 macOS run, 2026-11-16, branch mac-testing: Apple Silicon, Obsidian 1.15.0, disposable test vault, driven through the
 Obsidian command line plus real keyboard and mouse input. Build main.js 1da33758... (d1dad69c... after the follow-up below) (c5ce6fa7... for the first pass).
 Passed: type check; 115 of 116 automated checks (113 of 114 before the follow-up) (the failing one, installed-workspace, needs the Obsidian 1.15.1

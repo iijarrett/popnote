@@ -112,7 +112,7 @@ function installedHost() {
     new InstalledWorkspace();
   `;
   const ws = vm.runInNewContext(code, { events, writes, console });
-  const compat = new WorkspaceCompatibility(ws, message => notices.push(message), (event, details) => events.push({ event, ...structuredClone(details) }));
+  const compat = new WorkspaceCompatibility(ws, message => notices.push(message));
   return { ws, compat, events, writes, notices };
 }
 
@@ -124,10 +124,7 @@ test(`installed Obsidian ${version}: incoming filter runs before actual deserial
   await h.ws.loadLayout(); await Promise.resolve();
   assert.deepEqual(input, before);
   assert.deepEqual(h.events.filter(item => item.event === "window-create").map(item => item.id), ["ordinary-window"]);
-  const incoming = h.events.findIndex(item => item.event === "incoming-layout-delegate");
-  const created = h.events.findIndex(item => item.event === "window-create");
-  assert.ok(incoming >= 0 && incoming < created);
-  assert.ok(h.events.some(item => item.event === "compat-startup-check" && item.verified === true));
+  assert.equal(h.compat.canOpen(), true, "the incoming hook was seen before layout-ready");
   assert.deepEqual(h.notices, []);
 });
 

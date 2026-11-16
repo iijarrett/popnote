@@ -40,7 +40,7 @@ function host(pinFallbackLevel, mac = false) {
       Notice: class { constructor(message) { notices.push(message); } }, Platform: { isLinux: false, isMacOS: mac },
     } : { remote },
   });
-  const native = new module.exports.PopNoteNative(() => {}, undefined, pinFallbackLevel);
+  const native = new module.exports.PopNoteNative(pinFallbackLevel);
   return { native, original, unrelated, document, notices, listeners, remote,
     allow(value) { allowed = value; }, bind() { return native.bind(document, () => allowed); } };
 }

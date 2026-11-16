@@ -4,7 +4,7 @@ import { loadCompatibility, ownedId, leaf, tabs, win, fixture } from "./compat-h
 const { filterLayout, WorkspaceCompatibility } = loadCompatibility();
 const plain = value => structuredClone(value);
 function setup() {
-  const data = fixture(), notices = [], trace = [], calls = [];
+  const data = fixture(), notices = [], calls = [];
   const result = Promise.resolve("host-return");
   const ws = {
     layoutReady: false,
@@ -14,8 +14,8 @@ function setup() {
     leaves: [],
     requestSaveLayout() {},
   };
-  const compat = new WorkspaceCompatibility(ws, message => notices.push(message), (event, details) => trace.push({ event, ...plain(details) }));
-  return { ws, data, notices, trace, calls, result, compat };
+  const compat = new WorkspaceCompatibility(ws, message => notices.push(message));
+  return { ws, data, notices, calls, result, compat };
 }
 
 test("filter removes only marked floating leaves, preserves same-note windows, and deeply isolates the output", () => {
@@ -63,7 +63,7 @@ test("wrappers preserve receiver, extra arguments, original result and exception
   assert.notEqual(output, h.data);
   const error = Error("upstream"); h.compat.dispose();
   h.ws.setLayout = () => { throw error; };
-  const next = new WorkspaceCompatibility(h.ws, () => {}, () => {}); next.install();
+  const next = new WorkspaceCompatibility(h.ws, () => {}); next.install();
   assert.throws(() => h.ws.setLayout(h.data), value => value === error);
 });
 
@@ -77,7 +77,7 @@ test("existing wrappers run; later wrappers are retained on disable and re-enabl
   assert.equal(h.ws.getLayout().floating.children.length, 1);
   h.compat.dispose(); assert.equal(h.ws.getLayout, outer);
   assert.equal(h.ws.getLayout(), h.data);
-  const next = new WorkspaceCompatibility(h.ws, () => {}, () => {}); next.install();
+  const next = new WorkspaceCompatibility(h.ws, () => {}); next.install();
   assert.equal(h.ws.getLayout().floating.children.length, 1);
   next.dispose(); assert.equal(h.ws.getLayout, outer);
   assert.equal(earlier, 3); assert.equal(later, 3); assert.notEqual(previous, outer);
@@ -88,7 +88,7 @@ test("cleanup restores the original own-property or prototype method accurately"
   assert.equal(h.ws.getLayout, own);
   const proto = { getLayout: own, setLayout: h.ws.setLayout, getLeafById: h.ws.getLeafById };
   const ws = Object.assign(Object.create(proto), { layoutReady: true });
-  const compat = new WorkspaceCompatibility(ws, () => {}, () => {});
+  const compat = new WorkspaceCompatibility(ws, () => {});
   compat.install(); compat.dispose();
   assert.equal(Object.hasOwn(ws, "getLayout"), false);
 });
@@ -177,7 +177,6 @@ test("cold-start proof requires an incoming call before layout-ready; late enabl
   assert.equal(q.compat.canOpen(), true);
   const r = setup(); r.compat.install(); r.ws.setLayout(r.data); r.ws.layoutReady = true; r.compat.finishStartup();
   assert.equal(r.compat.canOpen(), true);
-  assert.ok(r.trace.some(entry => entry.event === "compat-startup-check" && entry.incomingBeforeReady === true));
 });
 
 test("unexpected missing arguments retain their original count", () => {
@@ -197,7 +196,7 @@ test("later incoming wrappers survive cleanup and see unchanged input while the 
   const outer = h.ws.setLayout = function (...args) { return inner.apply(this, args); };
   h.compat.dispose(); assert.equal(h.ws.setLayout, outer);
   assert.equal(h.ws.setLayout(h.data), h.result); assert.equal(h.calls[0].args[0], h.data);
-  const next = new WorkspaceCompatibility(h.ws, () => {}, () => {}); next.install();
+  const next = new WorkspaceCompatibility(h.ws, () => {}); next.install();
   h.ws.setLayout(h.data); assert.notEqual(h.calls[1].args[0], h.data);
   next.dispose(); assert.equal(h.ws.setLayout, outer);
 });

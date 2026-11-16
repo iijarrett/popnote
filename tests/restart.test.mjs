@@ -308,27 +308,15 @@ test("save errors are reported and do not poison later saves", async () => {
   assert.equal(h.disk().shortcut, "Control+Alt+O");
 });
 
-test("debug logging is off by default and stores nothing; turned on it logs lifecycle and save completion", async () => {
-  const quiet = host(settings);
-  await quiet.plugin.onload(); quiet.ready(); quiet.commands.get("use-current-note")(); await settle();
-  quiet.plugin.onunload(); await settle();
-  assert.equal(quiet.logs.filter(line => line.includes("[PopNote]")).length, 0);
-  assert.equal(quiet.storage.size, 0);
-  const loud = host({ ...settings, debug: true });
-  await loud.plugin.onload(); loud.ready(); loud.commands.get("use-current-note")(); await settle();
-  loud.plugin.onunload(); await settle();
-  for (const event of ["plugin-load", "save-complete", "plugin-unload"])
-    assert.ok(loud.logs.some(line => line.includes(event)), `missing ${event}`);
-  assert.equal(loud.storage.size, 0);
-});
-
-test("debug logging can be switched on from settings and is remembered", async () => {
-  const h = host(settings); await h.plugin.onload();
-  h.plugin.setDebug(true); await settle();
-  assert.equal(h.disk().debug, true);
-  assert.ok(h.logs.some(line => line.includes("save-complete")));
-  const restarted = host(h.disk()); await restarted.plugin.onload();
-  assert.ok(restarted.logs.some(line => line.includes("plugin-load")));
+test("PopNote writes nothing to the console and keeps no debug setting", async () => {
+  const h = host(settings);
+  await h.plugin.onload(); h.ready(); h.commands.get("use-current-note")(); await settle();
+  h.keys.get(settings.shortcut)(); await settle(); h.keys.get(settings.shortcut)(); await settle();
+  h.plugin.onunload(); await settle();
+  assert.deepEqual([...h.logs], []);
+  assert.equal(h.notices.some(message => message.includes("Native window ID")), false);
+  assert.equal("debug" in h.disk(), false);
+  assert.equal(h.storage.size, 0);
 });
 
 test("malformed settings and mobile remain safe", async () => {
@@ -358,7 +346,7 @@ test("a saved shortcut refused at startup is retained without startup writes or 
 });
 
 test("layout events never create or clean up a restored floating window", async () => {
-  const h = host({ ...settings, debug: true }); await h.plugin.onload();
+  const h = host(settings); await h.plugin.onload();
   // Obsidian restores an independent floating leaf, outside plugin ownership.
   await h.plugin.app.workspace.openPopoutLeaf();
   h.ready(); h.event("window-open"); h.event("window-close");
@@ -367,15 +355,13 @@ test("layout events never create or clean up a restored floating window", async 
   assert.equal(h.windows[0].destroyed, false);
 });
 
-test("beforeunload flushes pending bounds and records the pending write", async () => {
-  const h = host({ ...settings, debug: true }); await h.plugin.onload();
+test("beforeunload flushes pending bounds", async () => {
+  const h = host(settings); await h.plugin.onload();
   h.keys.get("Control+Alt+Shift+P")(); await settle();
   h.windows[0].bounds = { x: 200, y: 210, width: 550, height: 460 };
   h.windows[0].emit("move"); h.event("beforeunload"); await settle();
   assert.deepEqual(h.disk().windowBounds, { x: 200, y: 210, width: 550, height: 460 });
   assert.equal(h.disk().opacity, 0.6);
-  assert.ok(h.logs.some(line => line.includes('"event":"main-beforeunload"') && line.includes('"boundsSaveScheduled":true')));
-  assert.ok(h.logs.some(line => line.includes('"event":"save-complete"') && line.includes('"reason":"bounds"')));
 });
 
 test("renderer shutdown releases only its own shortcut across repeated Mac restarts", async () => {
@@ -400,10 +386,9 @@ test("renderer shutdown releases only its own shortcut across repeated Mac resta
 test("a stale startup registration is reclaimed, but Apply never takes a foreign shortcut", async () => {
   const stale = () => {};
   const keys = new Map([["Command+Option+P", stale], ["Command+Option+O", stale]]);
-  const h = host({ ...settings, shortcut: "Command+Option+P", debug: true }, { keys, macOS: true });
+  const h = host({ ...settings, shortcut: "Command+Option+P" }, { keys, macOS: true });
   await h.plugin.onload();
   assert.notEqual(keys.get("Command+Option+P"), stale);
-  assert.ok(h.logs.some(line => line.includes('"event":"shortcut-reclaimed"')));
   h.plugin.applyShortcut("Command+Option+O");
   assert.equal(keys.get("Command+Option+O"), stale);
   keys.get("Command+Option+P")(); await settle();
@@ -474,7 +459,7 @@ test("mixed tabs release controls/native effects before shortcut, callbacks or s
   assert.equal(h.windows[1].alpha, 0.4);
   h.sliders[0](0.9); h.toggles[0](false); staleBounds(); h.tick(); await settle();
   assert.equal(h.windows[1].alpha, 0.4); assert.equal(oldWindow.alpha, 1);
-  assert.deepEqual(h.disk(), { ...guardedSettings, pinned: true, allSpaces: false, tray: false, debug: false, helpShown: false });
+  assert.deepEqual(h.disk(), { ...guardedSettings, pinned: true, allSpaces: false, tray: false, helpShown: false });
   assert.equal(h.writes.length, 1, "only the remembered pin was saved");
   h.plugin.onunload(); await settle();
   assert.equal(owned.detaches, 0); assert.equal(oldWindow.destroyed, false);
@@ -574,15 +559,6 @@ test("released overlay listeners cannot affect a later window", async () => {
   h.keys.get(settings.shortcut)(); await settle();
   range.value = "0.9"; stale({ target: range });
   assert.equal(h.windows[1].alpha, 0.4);
-});
-
-test("routine native diagnostics stay in logs rather than visible Notices", async () => {
-  const h = host({ ...guardedSettings, debug: true }); await h.plugin.onload(); h.keys.get(settings.shortcut)(); await settle();
-  h.keys.get(settings.shortcut)(); await settle(); h.keys.get(settings.shortcut)(); await settle();
-  assert.ok(h.logs.some(line => line.includes("Native window ID") && line.includes("created")));
-  assert.ok(h.logs.some(line => line.includes("Native window ID") && line.includes("reused")));
-  assert.equal(h.notices.some(message => message.includes("Native window ID")), false);
-  h.plugin.onunload();
 });
 
 for (const trigger of ["layout-change", "show-controls"]) {

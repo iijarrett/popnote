@@ -59,17 +59,10 @@ export class PopNoteNative {
   private changes = new Map<string, { undo: () => void }>();
   private accelerator: string | null = null;
   private disabled = new Set<string>();
-  private previousId: number | null = null;
   private trayIcon: { destroy?(): void; isDestroyed?(): boolean } | null = null;
   private trayMenu: (() => unknown) | null = null;
-  private report: (message: string) => void;
 
-  constructor(
-    report: (message: string) => void,
-    private trace: (event: string, details: Record<string, unknown>) => void = () => {},
-    private pinFallbackLevel?: "pop-up-menu",
-  ) {
-    this.report = report;
+  constructor(private pinFallbackLevel?: "pop-up-menu") {
     for (const load of [
       () => require("electron")?.remote,
       () => require("@electron/remote"),
@@ -151,8 +144,6 @@ export class PopNoteNative {
       if (!canControl()) return false;
       this.window = window;
       this.canControl = canControl;
-      this.report(`Native window ID ${window.id}: created; previous ID ${this.previousId ?? "none"}`);
-      this.previousId = window.id;
       return true;
     }) ?? false;
   }
@@ -235,7 +226,6 @@ export class PopNoteNative {
         this.bringForward(window);
         action = "focused";
       }
-      this.report(`Native window ID ${window.id}: ${action} (reused)`);
       return action;
     });
   }
@@ -403,7 +393,6 @@ export class PopNoteNative {
       this.method(shortcuts, "unregister");
       if (reclaim && typeof shortcuts.isRegistered === "function" && shortcuts.isRegistered(accelerator)) {
         shortcuts.unregister(accelerator);
-        this.trace("shortcut-reclaimed", { accelerator });
       }
       const registered = shortcuts.register(accelerator, () => {
         if (this.accelerator !== accelerator) return;
@@ -504,8 +493,7 @@ export class PopNoteNative {
 
   dispose(): void {
     this.destroyTray();
-    const released = this.unregisterShortcut();
-    this.trace("shortcut-cleanup", { released });
+    this.unregisterShortcut();
     this.release();
   }
 }

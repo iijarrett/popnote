@@ -25,7 +25,6 @@ export class PopNoteWindow {
   private cancelAttachment?: () => void;
 
   constructor(app: App, private compatibility: WorkspaceCompatibility,
-    private trace: (event: string, details: Record<string, unknown>) => void = () => {},
     private onRelease: (reason: string) => void = () => {}) {
     this.app = app;
   }
@@ -119,7 +118,6 @@ export class PopNoteWindow {
       } catch { /* A window that cannot be detached is left for the user to close. */ }
     }
     for (const leaf of ownedLeaves) this.compatibility.release(leaf);
-    this.trace("popout-released", { reason });
   }
 
   private bindNewTabCommand(document: Document): () => void {
@@ -229,7 +227,6 @@ export class PopNoteWindow {
       // Restart protection is a convenience. If it is unavailable the window still opens;
       // it is then ordinary workspace content and may restore after a restart.
       if (this.compatibility.claim(leaf)) this.claimed = true;
-      else this.trace("popout-unprotected", {});
       await leaf.openFile(file);
       if (this.leaf !== leaf) throw new Error("Pop-out was closed while opening.");
       const document = await this.waitForAttachment(leaf, container);

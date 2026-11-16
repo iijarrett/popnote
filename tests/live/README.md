@@ -35,6 +35,4 @@ still work.
 Pressing the shortcut three times (hide, show, hide, same window); a real click and a right-click on the tray / menu-bar
 icon (menu entries Keep on top, Opacity > Slider…, Find note… with typing going into the search box, Switch note);
 dragging the window by the empty part of the tab strip; dragging it smaller (it should stop at 340 x 160); and, on a
-Mac, the window across Spaces (Show on all desktops is on by default) and next to a full-screen app. Turn **Debug
-logging** on in Settings -> PopNote before a failing check and copy the `[PopNote]` lines from the developer console
-(Cmd+Option+I).
+Mac, the window across Spaces (Show on all desktops is on by default) and next to a full-screen app.

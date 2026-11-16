@@ -70,7 +70,6 @@ export class WorkspaceCompatibility {
   private active = false;
   private failed = false;
   private cold = false;
-  private incoming = 0;
   private incomingBeforeReady = false;
   private undo: Array<() => void> = [];
   private originalGet?: Method;
@@ -79,7 +78,6 @@ export class WorkspaceCompatibility {
   private serializers = new Map<WorkspaceLeaf, { release: (id: string) => void; restore: () => void }>();
 
   constructor(workspace: Workspace, private notice: (message: string) => void,
-    private trace: (event: string, details: Record<string, unknown>) => void,
     private beforeSave: () => void = () => {}) {
     this.host = workspace;
   }
@@ -88,7 +86,6 @@ export class WorkspaceCompatibility {
     if (this.failed) return;
     this.failed = true;
     const reason = error instanceof Error ? error.message : String(error);
-    this.trace("compat-failed", { reason });
     this.notice(`PopNote: restart compatibility unavailable (${reason}). Original layout left unchanged; close PopNote manually before restarting.`);
   }
 
@@ -96,13 +93,7 @@ export class WorkspaceCompatibility {
     if (!this.active || this.failed) return value;
     try {
       const result = filterLayout(value);
-      if (direction === "incoming") {
-        this.incoming++;
-        if (!this.host.layoutReady) this.incomingBeforeReady = true;
-      }
-      this.trace(`${direction}-layout-filter`, {
-        removedIds: result.removedIds, layoutReadyAtEntry: this.host.layoutReady, incomingCalls: this.incoming,
-      });
+      if (direction === "incoming" && !this.host.layoutReady) this.incomingBeforeReady = true;
       return result.layout;
     } catch (error) {
       this.fail(error);
@@ -127,7 +118,6 @@ export class WorkspaceCompatibility {
           const next = args.slice();
           const filtered = compat.filter(args[0], "incoming");
           if (next.length) next[0] = filtered;
-          compat.trace("incoming-layout-delegate", { incomingCalls: compat.incoming });
           // Do not await or catch the host: preserve its exact return/Promise and errors.
           return original.apply(this, next);
         };
@@ -141,7 +131,6 @@ export class WorkspaceCompatibility {
         });
       }
       this.active = true;
-      this.trace("compat-installed", { installedBeforeLayoutReady: this.cold });
       return true;
     } catch (error) {
       this.dispose(); this.fail(error); return false;
@@ -197,7 +186,6 @@ export class WorkspaceCompatibility {
       this.owned.set(id, leaf);
       this.previousIds.set(leaf, previous);
       this.host.requestSaveLayout();
-      this.trace("ownership-claimed", { previousId: previous, id, lookupVerified: true, serializationVerified: true });
       return true;
     } catch (error) {
       try { if (item.id !== previous) Reflect.set(item, "id", previous); } catch { /* Leave cleanup to the owned leaf's caller. */ }
@@ -226,7 +214,6 @@ export class WorkspaceCompatibility {
       if (!renamed) {
         if (!serializer) throw new Error("released leaf serialization guard is unavailable");
         serializer.release(id);
-        this.trace("ownership-release-serialized-id", { id });
       } else {
         const found = this.host.getLeafById(id);
         if (found && found !== leaf) throw new Error("released leaf lookup changed");
@@ -237,7 +224,6 @@ export class WorkspaceCompatibility {
       // A fallback wrapper stays on this released leaf so disable/restart cannot
       // serialize the old ownership marker. It holds no plugin/host reference.
       this.serializers.delete(leaf);
-      this.trace("ownership-released", { id, ordinary: true });
       this.host.requestSaveLayout();
       return true;
     } catch (error) {
@@ -248,10 +234,6 @@ export class WorkspaceCompatibility {
 
   finishStartup(): void {
     const passed = !this.failed && this.incomingBeforeReady;
-    this.trace("compat-startup-check", {
-      coldStart: this.cold, incomingCalls: this.incoming, incomingBeforeReady: this.incomingBeforeReady,
-      verified: this.cold ? passed : false,
-    });
     if (this.cold && !passed) this.fail(new Error("incoming hook was not observed before layout-ready"));
   }
 

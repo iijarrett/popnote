@@ -51,7 +51,7 @@ function host(options = {}) {
     owns: () => claimed > released && options.claimFails !== true,
     release() { released++; return true; },
   };
-  const popout = new module.exports.PopNoteWindow(app, compatibility, (event, details) => events.push({ event, details }), options.onRelease);
+  const popout = new module.exports.PopNoteWindow(app, compatibility, options.onRelease);
   let second;
   if (options.tabs) {
     const tabs = { children: [leaf], currentTab: 0 };
@@ -150,7 +150,6 @@ test("unavailable restart protection does not stop the window from opening", asy
   const h = host({ claimFails: true, attached: true });
   await h.popout.open({});
   assert.equal(h.counts().detached, 0); assert.equal(h.popout.isOpen(), true);
-  assert.ok(h.events.some(entry => entry.event === "popout-unprotected"));
 });
 
 test("a workspace that is still loading refuses to open", async () => {

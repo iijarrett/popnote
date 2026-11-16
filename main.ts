@@ -1,4 +1,4 @@
-import { Notice, Platform, Plugin, PluginSettingTab, Setting, TFile, apiVersion } from "obsidian";
+import { Notice, Platform, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
 import { PopNoteNative, type TrayItem, type WindowBounds } from "./src/native";
 import { rankNotes } from "./src/notes";
 import { OverlayControls } from "./src/overlay";
@@ -27,7 +27,6 @@ export default class PopNotePlugin extends Plugin {
   private shortcutActive = false;
   private allSpaces = false;
   private tray = false;
-  private debug = false;
   private helpShown = false;
 
   async onload(): Promise<void> {
@@ -35,7 +34,7 @@ export default class PopNotePlugin extends Plugin {
     const mainWindow = this.app.workspace.containerEl.ownerDocument.defaultView;
     // Install before loadData or any other await, not merely before layout-ready.
     this.compatibility = new WorkspaceCompatibility(this.app.workspace,
-      (message) => { new Notice(message); }, (event, details) => this.log(event, details),
+      (message) => { new Notice(message); },
       () => { this.popout?.checkOwnership(); });
     this.compatibility.install();
     const defaults = {
@@ -47,11 +46,8 @@ export default class PopNotePlugin extends Plugin {
     this.allSpaces = defaults.allSpaces;
     await this.loadWindowSettings();
     if (this.stopped) return;
-    this.log("plugin-load", { layoutReady: this.app.workspace.layoutReady, obsidianVersion: apiVersion });
-    this.popout = new PopNoteWindow(this.app, this.compatibility, (event, details) => this.log(event, details),
-      (reason) => this.releaseWindowBinding(reason));
-    this.native = new PopNoteNative((message) => this.log("native-action", { message }),
-      (event, details) => this.log(event, details), defaults.pinFallbackLevel);
+    this.popout = new PopNoteWindow(this.app, this.compatibility, (reason) => this.releaseWindowBinding(reason));
+    this.native = new PopNoteNative(defaults.pinFallbackLevel);
     if (this.tray) this.applyTray(true);
     this.registerEvent(this.app.workspace.on("layout-change", () => {
       this.popout?.checkOwnership();
@@ -68,11 +64,10 @@ export default class PopNotePlugin extends Plugin {
     }));
     if (mainWindow) {
       this.registerDomEvent(mainWindow, "beforeunload", (event) => {
-        this.log("main-beforeunload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined });
-        if (!event.defaultPrevented) this.finishRendererShutdown("beforeunload");
+        if (!event.defaultPrevented) this.finishRendererShutdown();
       });
       this.registerDomEvent(mainWindow, "pagehide", (event) => {
-        if (!event.persisted) this.finishRendererShutdown("pagehide");
+        if (!event.persisted) this.finishRendererShutdown();
       });
     }
     this.addCommand({
@@ -107,21 +102,15 @@ export default class PopNotePlugin extends Plugin {
     this.applyShortcut(this.shortcut, false);
   }
 
-  /** Debug logging: console only, never stored, and silent unless switched on in settings. */
-  private log(event: string, details: Record<string, unknown> = {}): void {
-    if (this.debug) console.info(`[PopNote] ${JSON.stringify({ time: new Date().toISOString(), event, ...details })}`);
-  }
-
   private async loadWindowSettings(): Promise<void> {
     try {
       const data = await this.loadData();
       if (typeof data !== "object" || data === null || Array.isArray(data)) return;
       this.storedData = data;
-      const { windowBounds, opacity, notePath, shortcut, pinned, allSpaces, tray, debug, helpShown } = data;
+      const { windowBounds, opacity, notePath, shortcut, pinned, allSpaces, tray, helpShown } = data;
       if (typeof pinned === "boolean") this.pinned = pinned;
       if (typeof allSpaces === "boolean") this.allSpaces = allSpaces;
       this.tray = tray === true;
-      this.debug = debug === true;
       this.helpShown = helpShown === true;
       if (typeof notePath === "string" && notePath.trim()) this.notePath = notePath;
       if (typeof shortcut === "string" && shortcut.trim()) {
@@ -137,9 +126,7 @@ export default class PopNotePlugin extends Plugin {
         this.bounds = Number.isFinite(x) && Number.isFinite(y) ? { x, y, width, height } : { width, height };
       }
     } catch {
-      this.log("settings-load-failed");
       new Notice("PopNote: saved window settings could not be read.");
-    } finally {
     }
   }
 
@@ -150,7 +137,7 @@ export default class PopNotePlugin extends Plugin {
 
   private flushWindowSave(): void {
     if (this.saveTimer === undefined) return;
-    this.queueSave("bounds");
+    this.queueSave();
   }
 
   private flushShutdownBounds(): void {
@@ -159,31 +146,27 @@ export default class PopNotePlugin extends Plugin {
     this.flushWindowSave();
   }
 
-  private finishRendererShutdown(source: "beforeunload" | "pagehide"): void {
+  private finishRendererShutdown(): void {
     this.flushShutdownBounds();
     this.native?.destroyTray();
     if (!this.shortcutActive || !this.native) return;
     // Obsidian can replace the renderer without calling the plugin's unload hook.
-    const released = this.native.unregisterShortcut();
-    if (released) this.shortcutActive = false;
-    this.log("shortcut-cleanup", { released, source });
+    if (this.native.unregisterShortcut()) this.shortcutActive = false;
   }
 
-  private queueSave(reason: string): void {
+  private queueSave(): void {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
     const snapshot = {
       ...this.storedData, notePath: this.notePath, shortcut: this.savedShortcut,
       windowBounds: this.bounds, opacity: this.opacity, pinned: this.pinned,
-      allSpaces: this.allSpaces, tray: this.tray, debug: this.debug, helpShown: this.helpShown,
+      allSpaces: this.allSpaces, tray: this.tray, helpShown: this.helpShown,
     };
     this.pendingSaves++;
     this.saveQueue = this.saveQueue.then(async () => {
       try {
         await this.saveData(snapshot);
-        this.log("save-complete", { reason });
       } catch {
-        this.log("save-failed", { reason });
         new Notice("PopNote: settings could not be saved.");
       } finally {
         this.pendingSaves--;
@@ -198,13 +181,12 @@ export default class PopNotePlugin extends Plugin {
       return;
     }
     const registered = this.native?.registerShortcut(accelerator, () => { void this.toggle("shortcut"); }, !persist) ?? false;
-    this.log("shortcut-registration", { accelerator, success: registered, source: persist ? "apply" : "startup" });
     if (registered) {
       this.shortcutActive = true;
       this.shortcut = accelerator;
       if (persist) {
         this.savedShortcut = accelerator;
-        this.queueSave("shortcut");
+        this.queueSave();
       }
     }
   }
@@ -213,26 +195,21 @@ export default class PopNotePlugin extends Plugin {
     return this.shortcut;
   }
 
-  settingsSnapshot(): { allSpaces: boolean; tray: boolean; debug: boolean } {
-    return { allSpaces: this.allSpaces, tray: this.tray, debug: this.debug };
+  settingsSnapshot(): { allSpaces: boolean; tray: boolean } {
+    return { allSpaces: this.allSpaces, tray: this.tray };
   }
 
   setAllSpaces(value: boolean): void {
     this.allSpaces = value;
-    this.queueSave("all-spaces");
+    this.queueSave();
     if (value && this.popout?.isOpen()) this.native?.allSpaces(true);
   }
 
   setTray(value: boolean): boolean {
     const applied = this.applyTray(value);
     this.tray = value && applied;
-    this.queueSave("tray");
+    this.queueSave();
     return this.tray === value;
-  }
-
-  setDebug(value: boolean): void {
-    this.debug = value;
-    this.queueSave("debug");
   }
 
   private applyTray(enabled: boolean): boolean {
@@ -268,7 +245,7 @@ export default class PopNotePlugin extends Plugin {
   private setPinned(value: boolean): boolean {
     if (this.popout?.isOpen() && !this.native?.pin(value)) return false;
     this.pinned = value;
-    this.queueSave("pin");
+    this.queueSave();
     this.native?.refreshTrayMenu();
     return true;
   }
@@ -276,7 +253,7 @@ export default class PopNotePlugin extends Plugin {
   private setOpacityValue(value: number): boolean {
     if (this.popout?.isOpen() && !this.native?.opacity(value)) return false;
     this.opacity = value;
-    this.queueSave("opacity");
+    this.queueSave();
     this.native?.refreshTrayMenu();
     return true;
   }
@@ -314,7 +291,7 @@ export default class PopNotePlugin extends Plugin {
       return false;
     }
     this.notePath = file.path;
-    this.queueSave("note");
+    this.queueSave();
     this.overlay?.setNote(file.path);
     this.native?.refreshTrayMenu();
     return true;
@@ -419,15 +396,14 @@ export default class PopNotePlugin extends Plugin {
       const opacityApplied = this.native.opacity(this.opacity);
       overlay.setNativeAvailability(pinApplied, opacityApplied);
       
-      if (this.notePath !== file.path) { this.notePath = file.path; this.queueSave("note"); }
+      if (this.notePath !== file.path) { this.notePath = file.path; this.queueSave(); }
       if (Platform.isWin && !this.helpShown) {
         this.helpShown = true;
-        this.queueSave("help");
+        this.queueSave();
         new Notice("PopNote tip: to show it on every desktop, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.", 15000);
       }
       // Creation already shows the public pop-out; do not toggle it back to hidden.
     } catch (error) {
-      this.log("summon-failed", { message: error instanceof Error ? error.message : String(error) });
       new Notice(`PopNote: could not open: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (this.operation === operation) this.busy = false;
@@ -435,7 +411,6 @@ export default class PopNotePlugin extends Plugin {
   }
 
   onunload(): void {
-    this.log("plugin-unload", { pendingSaves: this.pendingSaves, boundsSaveScheduled: this.saveTimer !== undefined, ownedPopoutOpen: this.popout?.isOpen() ?? false });
     this.stopped = true;
     this.flushShutdownBounds();
     this.native?.dispose();
@@ -475,9 +450,6 @@ class PopNoteSettings extends PluginSettingTab {
       .addToggle((toggle) => toggle.setValue(current.tray).onChange((value) => {
         if (!this.plugin.setTray(value)) toggle.setValue(!value);
       }));
-    new Setting(this.containerEl).setName("Debug logging")
-      .setDesc("Writes PopNote lifecycle events to the developer console. Nothing is stored.")
-      .addToggle((toggle) => toggle.setValue(current.debug).onChange((value) => this.plugin.setDebug(value)));
     if (Platform.isWin) {
       this.containerEl.createEl("p", {
         text: "Windows tip: Pin keeps PopNote on top. To show it on every virtual desktop, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.",
