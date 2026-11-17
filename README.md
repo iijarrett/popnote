@@ -56,7 +56,7 @@ PopNote makes no network requests. Settings are saved in the vault's plugin data
 `npm ci --ignore-scripts`, then `npm run build` (type-check and bundle to `main.js`). `node --test tests/*.test.mjs`
 runs the checks. `tests/installed-workspace.test.mjs` reads an installed Obsidian archive (set
 `POPNOTE_OBSIDIAN_ASAR` if it is not at the Windows default); after an Obsidian update its name table needs re-mapping.
-Build-time dependencies are `obsidian@1.8.7`, `typescript@5.8.3` and `esbuild@0.25.5`; nothing is shipped at runtime.
+Build-time dependencies are `obsidian@1.14.4`, `typescript@5.8.3` and `esbuild@0.25.5`; nothing is shipped at runtime.
 Test in a disposable vault only. `data.json`, build output and personal planning files are excluded from Git.
 
 ## License
