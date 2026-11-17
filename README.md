@@ -4,7 +4,7 @@ PopNote gives an Obsidian note its own floating desktop window. A global shortcu
 and hides it, Pin keeps it above other apps, and an opacity slider fades it. It uses Obsidian's own pop-out window, so
 it looks like your theme and fonts. Desktop only; it does nothing on mobile.
 
-This is a development preview and requires Obsidian 1.15.0 or newer.
+Requires Obsidian 1.15.0 or newer.
 
 ## Install
 

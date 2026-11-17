@@ -5,6 +5,9 @@ first section; older sections keep the names and behavior of the version they te
 
 ## Current state
 
+Release 0.0.3, 2026-11-17: JD reported that the macOS re-run of the build without debug logging (`3a9f96d`) passed. The
+details of that run were not written to the repository at the time of release.
+
 Debug logging removed, 2026-11-16, Windows: the Settings toggle, the `debug` stored value, the console log and the trace hooks
 in `main.ts`, `native.ts`, `window.ts` and `workspace-compat.ts` are gone; PopNote writes nothing to the console. A saved
 `debug` value in an old `data.json` is ignored and dropped on the next save. Type check and 118 of 118 automated checks pass
