@@ -50,6 +50,12 @@ Enter. You can also run **PopNote: Use current note** to switch to the note you 
 | ![A note floating over another app](docs/screenshots/01-always-within-reach.png) | ![Pinned and semi-transparent over a document](docs/screenshots/02-pin-and-opacity.png) |
 | ![The tray right-click menu](docs/screenshots/03-tray-menu.png) | ![Searching for a note](docs/screenshots/04-find-a-note.png) |
 
+On macOS:
+
+| | |
+|---|---|
+| ![A note floating over TextEdit on macOS](docs/screenshots/06-macos-always-within-reach.png) | ![The menu-bar icon's right-click menu on macOS](docs/screenshots/07-macos-menu-bar.png) |
+
 ## Settings
 
 - **Global shortcut.** Write it without spaces, for example `Ctrl+Alt+P`. Use `Super` for the Windows key (`Super+Q`) and
