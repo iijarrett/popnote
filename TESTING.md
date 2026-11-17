@@ -5,6 +5,10 @@ first section; older sections keep the names and behavior of the version they te
 
 ## Current state
 
+Release 0.0.6, 2026-11-17: no code changes. It carries the rewritten README (demo GIF and screenshots, including macOS) so the
+directory listing shows it. `main.js` is expected to match 0.0.5 byte for byte. The macOS re-run of 0.0.5 was reported as passed
+by JD.
+
 Release 0.0.5, 2026-11-17: minimum Obsidian version lowered from 1.15.0 to 1.5.12. Tested on Windows 11 by running the official
 app archives for 1.10.6, 1.8.10, 1.7.7 and 1.5.12 (each on the Electron shell of the installed 1.15 app, in a separate profile,
 driven over the Chrome debugging port) with this build in a disposable vault. On each: the plugin loads; `scenario.js`, `tray.js`
