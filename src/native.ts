@@ -32,6 +32,7 @@ type NativeWindow = {
   setVisibleOnAllWorkspaces(value: boolean): void;
   isVisibleOnAllWorkspaces(): boolean;
   setFullScreenable?(value: boolean): void;
+  setFullScreen?(value: boolean): void;
   isFullScreenable?(): boolean;
   moveTop?(): void;
 };
@@ -371,6 +372,37 @@ export class PopNoteNative {
       need(window, "setFullScreenable");
       need(window, "isFullScreenable");
       this.change("Full screen guard", window, () => window.isFullScreenable(), (value) => window.setFullScreenable(value), false);
+    });
+    this.leaveFullScreenAtOnce();
+  }
+
+  /**
+   * macOS can still put a window that is not full-screenable into full screen from the tiling popover on its green button
+   * (seen live). Leave again as soon as that happens. macOS only lets a window leave full screen while it is full-screenable,
+   * so allow it for the exit and guard it again afterwards.
+   */
+  private leaveFullScreenAtOnce(): void {
+    this.attempt("Full screen exit", () => {
+      const window = this.liveWindow();
+      if (!window) return;
+      need(window, "setFullScreen");
+      need(window, "setFullScreenable");
+      const guarded = (action: () => void) => () => {
+        try {
+          if (!window.isDestroyed()) action();
+        } catch {
+          this.disable("Full screen exit", "handler failed");
+        }
+      };
+      const entered = guarded(() => { window.setFullScreenable(true); window.setFullScreen(false); });
+      const left = guarded(() => window.setFullScreenable(false));
+      window.on("enter-full-screen", entered);
+      window.on("leave-full-screen", left);
+      this.changes.set("Full screen exit", { undo: () => {
+        if (window.isDestroyed()) return;
+        window.removeListener("enter-full-screen", entered);
+        window.removeListener("leave-full-screen", left);
+      } });
     });
   }
 

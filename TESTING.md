@@ -16,7 +16,9 @@ macOS re-run of this build, reported by JD 2026-11-17 (Apple Silicon, Obsidian 1
 hide) and the right-click menu with the Opacity submenu (80% set the window to 0.8) all work. One known limit, also present in 0.0.5 and
 so not caused by this change: the window is created not full-screenable, and a click on the green button only fills the screen area, but
 clicking the green button and then pressing Ctrl+Cmd+F about 1.5 seconds later can still put it into real full-screen (likely macOS's
-window-tiling popover). Not yet fixed.
+window-tiling popover). Fix added to this release, untested on macOS: if the window still enters full screen, PopNote now leaves it at
+once (it allows full screen for the exit, which macOS requires, then guards it again) and removes its handlers on release. Covered by
+three new automated checks; a Mac re-test of the green-button case is still needed.
 
 Release 0.0.6, 2026-11-17: no code changes. It carries the rewritten README (demo GIF and screenshots, including macOS) so the
 directory listing shows it. `main.js` is expected to match 0.0.5 byte for byte. The macOS re-run of 0.0.5 was reported as passed

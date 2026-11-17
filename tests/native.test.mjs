@@ -21,6 +21,11 @@ function host(pinFallbackLevel, mac = false) {
     isAlwaysOnTop() { return this.pinned; }, setAlwaysOnTop(value) { this.pinned = value; },
     isVisibleOnAllWorkspaces() { return this.spaces; }, setVisibleOnAllWorkspaces(value) { this.spaces = value; },
     fullScreenable: true, isFullScreenable() { return this.fullScreenable; }, setFullScreenable(value) { this.fullScreenable = value; },
+    fullScreen: false, setFullScreen(value) {
+      // As on macOS: a window can only leave full screen while it is full-screenable.
+      if (!value && !this.fullScreenable) return;
+      this.fullScreen = value; listeners.get(value ? "enter-full-screen" : "leave-full-screen")?.();
+    },
     isVisible() { return this.visible; }, isMinimized: () => false, isFocused: () => true,
     show() { this.visible = true; }, hide() { this.visible = false; }, restore() {}, focus() {},
     showInactive() { this.visible = true; },
@@ -180,6 +185,32 @@ test("on macOS the window cannot become a full-screen window, and release undoes
   h.native.release(); assert.equal(h.original.fullScreenable, true); assert.deepEqual(h.notices, []);
   const other = host(); other.bind(); other.native.keepOutOfFullScreen();
   assert.equal(other.original.fullScreenable, true);
+});
+
+test("on macOS, if the window still enters full screen, it leaves at once and is guarded again", () => {
+  const h = host(undefined, true); h.bind(); h.native.keepOutOfFullScreen();
+  assert.equal(h.original.fullScreenable, false);
+  h.original.fullScreen = true; h.listeners.get("enter-full-screen")();
+  assert.equal(h.original.fullScreen, false, "the window left full screen");
+  assert.equal(h.original.fullScreenable, false, "the guard is back after leaving");
+  assert.deepEqual(h.notices, []);
+  h.native.release();
+  assert.equal(h.original.fullScreenable, true);
+  assert.equal(h.listeners.has("enter-full-screen"), false); assert.equal(h.listeners.has("leave-full-screen"), false);
+});
+
+test("a failing full-screen exit turns only that feature off with a notice", () => {
+  const h = host(undefined, true); h.bind(); h.native.keepOutOfFullScreen();
+  h.original.setFullScreen = () => { throw new Error("refused"); };
+  h.listeners.get("enter-full-screen")();
+  assert.ok(h.notices.some(message => message.includes("Full screen exit")));
+  assert.equal(h.native.pin(true), true);
+});
+
+test("a missing full-screen exit API keeps the guard and turns only the exit off on macOS", () => {
+  const h = host(undefined, true); delete h.original.setFullScreen; h.bind(); h.native.keepOutOfFullScreen();
+  assert.equal(h.original.fullScreenable, false);
+  assert.ok(h.notices.some(message => message.includes("Full screen exit")));
 });
 
 test("a missing full-screen API disables only that feature on macOS", () => {
