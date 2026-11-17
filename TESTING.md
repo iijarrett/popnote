@@ -5,6 +5,13 @@ first section; older sections keep the names and behavior of the version they te
 
 ## Current state
 
+Release 0.0.4, 2026-11-17, Windows 11 (Obsidian 1.15.1): changes from the directory's automatic review. Timers and random ids no
+longer use the main window's globals directly; elements are created with `createEl`; the settings tab also provides setting
+definitions so it appears in Obsidian's settings search (older versions still use the plain settings page, checked in the test
+doubles only); the unused `clip-path` rule is gone; releases are built and attested by a GitHub Actions workflow. 118 of 118
+automated checks pass; `scenario.js`, `tray.js` and `shortcut.js` pass; the settings page was read in Obsidian 1.15.1 (shortcut
+box, Apply button, two toggles and the Windows tip are present). Not re-run on macOS or Linux for this build.
+
 Release 0.0.3, 2026-11-17: JD reported that the macOS re-run of the build without debug logging (`3a9f96d`) passed. The
 details of that run were not written to the repository at the time of release.
 
