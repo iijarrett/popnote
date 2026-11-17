@@ -123,7 +123,7 @@ export class PopNoteNative {
       const windows = this.remote.BrowserWindow;
       this.method(windows, "getAllWindows");
       const originalTitle = document.title;
-      const marker = `popnote-window-${globalThis.crypto.randomUUID()}`;
+      const marker = `popnote-window-${crypto.randomUUID()}`;
       let matched: NativeWindow[];
       try {
         document.title = marker;

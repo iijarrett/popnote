@@ -176,7 +176,7 @@ export class WorkspaceCompatibility {
     try {
       if (typeof previous !== "string" || this.host.getLeafById(previous) !== leaf) throw new Error("initial leaf lookup failed");
       this.prepareSerialization(leaf);
-      const id = prefix + globalThis.crypto.randomUUID();
+      const id = prefix + crypto.randomUUID();
       if (!Reflect.set(item, "id", id) || item.id !== id || this.host.getLeafById(id) !== leaf || this.host.getLeafById(previous) === leaf) {
         throw new Error("renamed leaf lookup failed");
       }
@@ -207,7 +207,7 @@ export class WorkspaceCompatibility {
     const item = leaf as WorkspaceLeaf & { id: string };
     try {
       const existing = this.host.getLeafById(previous);
-      const id = !existing || existing === leaf ? previous : globalThis.crypto.randomUUID();
+      const id = !existing || existing === leaf ? previous : crypto.randomUUID();
       let renamed = false;
       try { renamed = Reflect.set(item, "id", id) && item.id === id; } catch { /* Use the prepared serialization fallback. */ }
       const serializer = this.serializers.get(leaf);

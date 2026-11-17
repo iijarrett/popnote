@@ -253,15 +253,15 @@ export class PopNoteWindow {
     return new Promise((resolve, reject) => {
       let finished = false;
       let observer: MutationObserver | undefined;
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      let timer: number | undefined;
       const finish = (error?: unknown, attached?: Document) => {
         if (finished) return;
         finished = true;
         observer?.disconnect();
-        clearTimeout(timer);
+        window.clearTimeout(timer);
         container.win.removeEventListener("pagehide", cancel);
         if (this.cancelAttachment === cancel) this.cancelAttachment = undefined;
-        if (error) reject(error);
+        if (error) reject(error instanceof Error ? error : new Error(String(error)));
         else resolve(attached!);
       };
       const cancel = () => finish(new Error("Pop-out was closed while awaiting attachment."));
@@ -276,7 +276,7 @@ export class PopNoteWindow {
         observer = new MutationObserver(check);
         observer.observe(container.doc, { childList: true, subtree: true });
         container.win.addEventListener("pagehide", cancel);
-        timer = setTimeout(() => finish(new Error("Pop-out did not attach to its separate document within 5 seconds.")), 5000);
+        timer = window.setTimeout(() => finish(new Error("Pop-out did not attach to its separate document within 5 seconds.")), 5000);
         check();
       } catch (error) { finish(error); }
     });
@@ -293,8 +293,7 @@ export class PopNoteWindow {
     if (!host || host.ownerDocument !== document || (!stableGroup && !leaf.view.containerEl.contains(host))) {
       throw new Error("Note content container is unavailable; standard window controls remain available.");
     }
-    const controls = document.createElement("div");
-    controls.className = "popnote-overlay";
+    const controls = host.createDiv({ cls: "popnote-overlay" });
     this.controls = controls;
     this.controlsHost = host;
     host.classList.add("popnote-overlay-host");

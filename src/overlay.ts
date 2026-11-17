@@ -35,7 +35,7 @@ export class OverlayControls {
   constructor(private root: HTMLElement, note: string, private pinned: boolean,
     private opacity: number, private actions: OverlayActions) {
     this.document = root.ownerDocument;
-    const id = `popnote-controls-${globalThis.crypto.randomUUID()}`;
+    const id = `popnote-controls-${crypto.randomUUID()}`;
     this.recovery = this.button("⋯", "Show PopNote controls", root);
     this.recovery.className = "popnote-overlay-recovery";
     this.recovery.setAttribute("aria-controls", id);
@@ -181,10 +181,7 @@ export class OverlayControls {
   }
 
   private element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement): HTMLElementTagNameMap[K] {
-    const element = this.document.createElement(tag);
-    element.className = className;
-    parent.append(element);
-    return element;
+    return parent.createEl(tag, { cls: className });
   }
 
   private button(text: string, label: string, parent: HTMLElement): HTMLButtonElement {

@@ -27,6 +27,13 @@ export function domHost(onListen = () => {}) {
         remove: name => { this.className = this.className.split(/\s+/).filter(value => value !== name).join(" "); },
       };
     }
+    createEl(tag, options = {}) {
+      const element = new Element(tag, this.ownerDocument ?? document);
+      if (options.cls) element.className = options.cls;
+      this.append(element);
+      return element;
+    }
+    createDiv(options) { return this.createEl("div", options); }
     get firstChild() { return this.children[0] ?? null; }
     replaceChildren() { for (const child of [...this.children]) child.remove(); }
     // Tag-name selectors only, which is all the plugin uses.

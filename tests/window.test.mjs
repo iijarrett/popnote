@@ -25,6 +25,7 @@ function host(options = {}) {
   let currentContainer = container;
   const element = { ownerDocument: options.attached ? popoutDocument : mainDocument, isConnected: !!options.attached,
     append(child) { child.isConnected = this.isConnected; child.parentElement = this; },
+    createDiv() { const child = popoutDocument.createElement(); this.append(child); return child; },
     contains(other) { return other === this || other.parentElement === this; }, classList: { add() {}, remove() {} } };
   const leaf = {
     view: { containerEl: element, contentEl: element }, getContainer: () => currentContainer,
@@ -32,7 +33,7 @@ function host(options = {}) {
     detach() { detached++; element.isConnected = false; win.closed = true; },
   };
   const module = { exports: {} };
-  vm.runInNewContext(code, {
+  const sandbox = {
     module, exports: module.exports, require: () => ({ WorkspaceWindow }),
     MutationObserver: class {
       constructor(callback) { this.callback = callback; observers.add(this); }
@@ -41,7 +42,9 @@ function host(options = {}) {
     },
     setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
     clearTimeout(id) { timers.delete(id); },
-  });
+  };
+  sandbox.window = sandbox;
+  vm.runInNewContext(code, sandbox);
   const leaves = [leaf];
   const app = { workspace: { layoutReady: options.layoutReady ?? true, containerEl: { ownerDocument: mainDocument }, openPopoutLeaf: () => leaf,
     iterateAllLeaves: callback => leaves.forEach(callback) } };

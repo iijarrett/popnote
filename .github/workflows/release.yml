@@ -1,0 +1,39 @@
+name: Release
+
+# Pushing a tag such as 0.0.4 builds the plugin from that commit, signs the three release files with a GitHub artifact
+# attestation (proof of which commit and workflow built them), and publishes the GitHub release.
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Tag must match the manifest version
+        run: test "$(node -p "require('./manifest.json').version")" = "$GITHUB_REF_NAME"
+      # installed-workspace.test.mjs reads a desktop Obsidian archive, which a CI runner does not have.
+      - run: node --test $(ls tests/*.test.mjs | grep -v installed-workspace)
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" main.js manifest.json styles.css --title "PopNote $GITHUB_REF_NAME" --generate-notes

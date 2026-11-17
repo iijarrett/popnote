@@ -129,6 +129,7 @@ function host(initial = {}, options = {}) {
       events.get("active-leaf-change")?.(leaf);
     };
   }
+  const settingTabs = [];
   const files = new Map([[file.path, file]]);
   const newTabCommand = { checkCallback: () => true };
   const app = { workspace, commands: { findCommand: () => newTabCommand }, vault: { getName: () => "test_vault", getAbstractFileByPath: path => files.get(path) ?? null, getMarkdownFiles: () => [...files.values()] } };
@@ -142,11 +143,13 @@ function host(initial = {}, options = {}) {
       disk = structuredClone(value);
     };
     addCommand = command => commands.set(command.id, command.callback);
-    addSettingTab() {} registerEvent() {}
+    addSettingTab(tab) { settingTabs.push(tab); } registerEvent() {}
     registerDomEvent(target, name, callback) { events.set(name, callback); }
   }
   class Setting {
-    setName() { return this; }
+    setName() { return this; } setDesc() { return this; }
+    addText(callback) { callback({ setValue() { return this; }, onChange() { return this; } }); return this; }
+    addButton(callback) { callback({ setButtonText() { return this; }, onClick() { return this; } }); return this; }
     addToggle(callback) { callback({ setValue() { return this; }, onChange(fn) { toggles.push(fn); return this; }, setDisabled() {} }); return this; }
     addSlider(callback) {
       const slider = {
@@ -179,7 +182,7 @@ function host(initial = {}, options = {}) {
     },
   };
   const exports = {}, module = { exports };
-  vm.runInNewContext(bundle, {
+  const sandbox = {
     module, exports,
     require: name => {
       if (name === "obsidian") return {
@@ -194,7 +197,9 @@ function host(initial = {}, options = {}) {
     clearTimeout: id => timers.delete(id),
     crypto: { randomUUID }, structuredClone,
     console: { info: line => logs.push(line), warn: line => logs.push(line) },
-  });
+  };
+  sandbox.window = sandbox;
+  vm.runInNewContext(bundle, sandbox);
   const plugin = new module.exports.default();
   const load = plugin.onload.bind(plugin);
   plugin.onload = async () => {
@@ -204,7 +209,7 @@ function host(initial = {}, options = {}) {
     await pending;
   };
   return {
-    plugin, writes, logs, notices, commands, keys, windows, opened, files, storage, sliders, toggles, leaves, trays,
+    plugin, settingTabs, writes, logs, notices, commands, keys, windows, opened, files, storage, sliders, toggles, leaves, trays,
     async enableAgain() { const next = new module.exports.default(); await next.onload(); return next; },
     mix(leaf = leaves[0]) {
       const ordinary = { id: `ordinary-${leaves.length}`, getContainer: () => leaf.getContainer(),
@@ -317,6 +322,22 @@ test("PopNote writes nothing to the console and keeps no debug setting", async (
   assert.equal(h.notices.some(message => message.includes("Native window ID")), false);
   assert.equal("debug" in h.disk(), false);
   assert.equal(h.storage.size, 0);
+});
+
+test("settings are searchable on new Obsidian and still render on older versions", async () => {
+  const row = () => { const calls = []; const chain = new Proxy({}, { get: (_, name) => (...args) => { calls.push(name); for (const arg of args) if (typeof arg === "function") arg(chain); return chain; } }); return { chain, calls }; };
+  const win = host(settings, { windows: true }); await win.plugin.onload();
+  const items = win.settingTabs[0].getSettingDefinitions();
+  assert.deepEqual([...items.map(item => item.name)], ["How it works", "Global shortcut", "Show on all desktops", "Tray icon", "Windows tip"]);
+  assert.ok(items.filter(item => item.render).length >= 3 && items.every(item => typeof item.desc === "string"));
+  const { chain, calls } = row(); items.find(item => item.name === "Tray icon").render(chain);
+  assert.ok(calls.includes("addToggle"));
+  const other = host(settings); await other.plugin.onload();
+  assert.equal(other.settingTabs[0].getSettingDefinitions().some(item => item.name === "Windows tip" && item.visible !== false), false);
+  const text = [], tab = other.settingTabs[0];
+  tab.containerEl = { empty() {}, createEl: (tag, options) => text.push(options.text) };
+  tab.display();
+  assert.ok(text[0].startsWith("Press the shortcut"));
 });
 
 test("malformed settings and mobile remain safe", async () => {

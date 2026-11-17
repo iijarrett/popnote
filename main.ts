@@ -1,4 +1,4 @@
-import { Notice, Platform, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
+import { Notice, Platform, Plugin, PluginSettingTab, Setting, TFile, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
 import { PopNoteNative, type TrayItem, type WindowBounds } from "./src/native";
 import { rankNotes } from "./src/notes";
 import { OverlayControls } from "./src/overlay";
@@ -18,7 +18,7 @@ export default class PopNotePlugin extends Plugin {
   private bounds?: WindowBounds;
   private stopWatchingBounds?: () => void;
   private storedData: Record<string, unknown> = {};
-  private saveTimer?: ReturnType<typeof setTimeout>;
+  private saveTimer?: number;
   private saveQueue = Promise.resolve();
   private pendingSaves = 0;
   private savedShortcut?: string;
@@ -131,8 +131,8 @@ export default class PopNotePlugin extends Plugin {
   }
 
   private scheduleWindowSave(): void {
-    clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.flushWindowSave(), 250);
+    window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => this.flushWindowSave(), 250);
   }
 
   private flushWindowSave(): void {
@@ -155,7 +155,7 @@ export default class PopNotePlugin extends Plugin {
   }
 
   private queueSave(): void {
-    clearTimeout(this.saveTimer);
+    window.clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
     const snapshot = {
       ...this.storedData, notePath: this.notePath, shortcut: this.savedShortcut,
@@ -334,7 +334,7 @@ export default class PopNotePlugin extends Plugin {
       this.popout.focusEditor();
     };
     focus();
-    setTimeout(focus, 150);
+    window.setTimeout(focus, 150);
   }
 
   private async toggle(source: "command" | "shortcut" | "tray"): Promise<void> {
@@ -421,6 +421,12 @@ export default class PopNotePlugin extends Plugin {
   }
 }
 
+/** One row of the settings tab. The same rows feed both the settings-search definitions (Obsidian 1.13+) and display() (older versions). */
+type SettingRow = { name: string; desc: string; aliases?: string[]; visible?: boolean; build?: (setting: Setting) => void };
+
+const INTRO = "Press the shortcut to open PopNote, then use its Note button to pick what it shows. The note, shortcut, size, position, pin and opacity are remembered. \"PopNote: Show controls\" can be given a hotkey in Settings > Hotkeys.";
+const WINDOWS_TIP = "Pin keeps PopNote on top. To show it on every virtual desktop, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.";
+
 class PopNoteSettings extends PluginSettingTab {
   private plugin: PopNotePlugin;
 
@@ -429,31 +435,51 @@ class PopNoteSettings extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  private rows(): SettingRow[] {
+    const plugin = this.plugin;
+    const current = plugin.settingsSnapshot();
+    let accelerator = plugin.currentShortcut();
+    return [
+      {
+        name: "Global shortcut", aliases: ["hotkey", "keyboard"],
+        desc: "A refused shortcut keeps the previous one. Write shortcuts without spaces, such as Ctrl+Alt+P. Use Super for the Windows key (Super+Q); on a Mac use Command, for example Command+Option+P. Spellings such as \"Win + Q\" can fail.",
+        build: (setting) => setting
+          .addText((text) => text.setValue(accelerator).onChange((value) => { accelerator = value; }))
+          .addButton((button) => button.setButtonText("Apply").onClick(() => { plugin.applyShortcut(accelerator); })),
+      },
+      {
+        name: "Show on all desktops", aliases: ["spaces", "virtual desktops"],
+        desc: "macOS Spaces and similar. Applies the next time PopNote opens. On Windows see the tip below.",
+        build: (setting) => setting.addToggle((toggle) => toggle.setValue(current.allSpaces).onChange((value) => plugin.setAllSpaces(value))),
+      },
+      {
+        name: "Tray icon", aliases: ["menu bar", "system tray"],
+        desc: "Adds a system tray icon. Clicking it shows or hides PopNote. Some Linux desktops have no tray.",
+        build: (setting) => setting.addToggle((toggle) => toggle.setValue(current.tray).onChange((value) => {
+          if (!plugin.setTray(value)) toggle.setValue(!value);
+        })),
+      },
+      { name: "Windows tip", desc: WINDOWS_TIP, visible: Platform.isWin },
+    ];
+  }
+
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      { name: "How it works", desc: INTRO, searchable: false },
+      ...this.rows().map(({ build, ...row }): SettingDefinition => build
+        ? { ...row, render: (setting) => build(setting) }
+        : row),
+    ];
+  }
+
+  /** Used by Obsidian versions before 1.13, which have no settings-search definitions. */
   display(): void {
     this.containerEl.empty();
-    this.containerEl.createEl("p", {
-      text: "Press the shortcut to open PopNote, then use its Note button to pick what it shows. The note, shortcut, size, position, pin and opacity are remembered. \"PopNote: Show controls\" can be given a hotkey in Settings > Hotkeys.",
-    });
-    let accelerator = this.plugin.currentShortcut();
-    new Setting(this.containerEl).setName("Global shortcut")
-      .setDesc("A refused shortcut keeps the previous one. Write shortcuts without spaces, such as Ctrl+Alt+P. Use Super for the Windows key (Super+Q); on a Mac use Command, for example Command+Option+P. Spellings such as \"Win + Q\" can fail.")
-      .addText((text) => text.setValue(accelerator).onChange((value) => { accelerator = value; }))
-      .addButton((button) => button.setButtonText("Apply").onClick(() => {
-        this.plugin.applyShortcut(accelerator);
-      }));
-    const current = this.plugin.settingsSnapshot();
-    new Setting(this.containerEl).setName("Show on all desktops")
-      .setDesc("macOS Spaces and similar. Applies the next time PopNote opens. On Windows see the tip below.")
-      .addToggle((toggle) => toggle.setValue(current.allSpaces).onChange((value) => this.plugin.setAllSpaces(value)));
-    new Setting(this.containerEl).setName("Tray icon")
-      .setDesc("Adds a system tray icon. Clicking it shows or hides PopNote. Some Linux desktops have no tray.")
-      .addToggle((toggle) => toggle.setValue(current.tray).onChange((value) => {
-        if (!this.plugin.setTray(value)) toggle.setValue(!value);
-      }));
-    if (Platform.isWin) {
-      this.containerEl.createEl("p", {
-        text: "Windows tip: Pin keeps PopNote on top. To show it on every virtual desktop, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.",
-      });
+    this.containerEl.createEl("p", { text: INTRO });
+    for (const row of this.rows()) {
+      if (row.visible === false) continue;
+      if (row.build) row.build(new Setting(this.containerEl).setName(row.name).setDesc(row.desc));
+      else this.containerEl.createEl("p", { text: `${row.name}: ${row.desc}` });
     }
   }
 }
