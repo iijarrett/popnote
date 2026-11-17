@@ -443,21 +443,26 @@ class PopNoteSettings extends PluginSettingTab {
       {
         name: "Global shortcut", aliases: ["hotkey", "keyboard"],
         desc: "A refused shortcut keeps the previous one. Write shortcuts without spaces, such as Ctrl+Alt+P. Use Super for the Windows key (Super+Q); on a Mac use Command, for example Command+Option+P. Spellings such as \"Win + Q\" can fail.",
-        build: (setting) => setting
-          .addText((text) => text.setValue(accelerator).onChange((value) => { accelerator = value; }))
-          .addButton((button) => button.setButtonText("Apply").onClick(() => { plugin.applyShortcut(accelerator); })),
+        build: (setting) => {
+          setting.addText((text) => text.setValue(accelerator).onChange((value) => { accelerator = value; }));
+          setting.addButton((button) => button.setButtonText("Apply").onClick(() => { plugin.applyShortcut(accelerator); }));
+        },
       },
       {
         name: "Show on all desktops", aliases: ["spaces", "virtual desktops"],
         desc: "macOS Spaces and similar. Applies the next time PopNote opens. On Windows see the tip below.",
-        build: (setting) => setting.addToggle((toggle) => toggle.setValue(current.allSpaces).onChange((value) => plugin.setAllSpaces(value))),
+        build: (setting) => {
+          setting.addToggle((toggle) => toggle.setValue(current.allSpaces).onChange((value) => { plugin.setAllSpaces(value); }));
+        },
       },
       {
         name: "Tray icon", aliases: ["menu bar", "system tray"],
         desc: "Adds a system tray icon. Clicking it shows or hides PopNote. Some Linux desktops have no tray.",
-        build: (setting) => setting.addToggle((toggle) => toggle.setValue(current.tray).onChange((value) => {
-          if (!plugin.setTray(value)) toggle.setValue(!value);
-        })),
+        build: (setting) => {
+          setting.addToggle((toggle) => toggle.setValue(current.tray).onChange((value) => {
+            if (!plugin.setTray(value)) toggle.setValue(!value);
+          }));
+        },
       },
       { name: "Windows tip", desc: WINDOWS_TIP, visible: Platform.isWin },
     ];

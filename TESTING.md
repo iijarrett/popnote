@@ -5,6 +5,18 @@ first section; older sections keep the names and behavior of the version they te
 
 ## Current state
 
+Release 0.0.5, 2026-11-17: minimum Obsidian version lowered from 1.15.0 to 1.5.12. Tested on Windows 11 by running the official
+app archives for 1.10.6, 1.8.10, 1.7.7 and 1.5.12 (each on the Electron shell of the installed 1.15 app, in a separate profile,
+driven over the Chrome debugging port) with this build in a disposable vault. On each: the plugin loads; `scenario.js`, `tray.js`
+and `shortcut.js` give the same results as on 1.15.1 (window opens, picker, pin, opacity, small sizes held at 340, hide and show
+the same window, tray menu and its handlers, shortcut registered); the restart protection is active, the saved layout holds no
+PopNote window, and after Reload app with the window open no window comes back and the shortcut is registered again; the plain
+settings page (used before 1.13) shows the shortcut box, Apply and two toggles. 1.15.1 also uses the settings-search definitions.
+Not covered: the Electron versions those Obsidian releases originally shipped with; versions between and below the four tested;
+macOS and Linux on versions older than 1.15.0. In this setup the first run of `tray.js` after a window was left open timed out,
+and ran fine on the second run in about 3 seconds; it looks like background-window timer throttling in the extra profile and was
+not seen on the normal 1.15.1 instance.
+
 Release 0.0.4, 2026-11-17, Windows 11 (Obsidian 1.15.1): changes from the directory's automatic review. Timers and random ids no
 longer use the main window's globals directly; elements are created with `createEl`; the settings tab also provides setting
 definitions so it appears in Obsidian's settings search (older versions still use the plain settings page, checked in the test
