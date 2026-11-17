@@ -10,7 +10,13 @@ hooks in `workspace-compat.ts` now use explicit types instead of `any`, and the 
 lint report had 129 warnings, reproduced locally with the Obsidian ESLint plugin (131 messages); the same check now reports none. 119 of
 119 automated checks pass (including the installed-workspace test on Obsidian 1.15.1). Live checks on a fresh profile: `scenario.js`, `shortcut.js`
 and the restart checks on Obsidian 1.15.1, 1.10.6, 1.8.10 and 1.5.12; `tray.js` on 1.15.1 and 1.5.12; the settings page on 1.5.12 (plain
-page) and 1.15.1 (search definitions). Not re-run on macOS or Linux for this build.
+page) and 1.15.1 (search definitions). Not re-run on Linux for this build.
+macOS re-run of this build, reported by JD 2026-11-17 (Apple Silicon, Obsidian 1.15.1, dark menu bar): build and 119 of 119 tests pass;
+`scenario.js`, `tray.js` and `shortcut.js` pass; the real shortcut (show, hide, show, same window), a real menu-bar click (show, then
+hide) and the right-click menu with the Opacity submenu (80% set the window to 0.8) all work. One known limit, also present in 0.0.5 and
+so not caused by this change: the window is created not full-screenable, and a click on the green button only fills the screen area, but
+clicking the green button and then pressing Ctrl+Cmd+F about 1.5 seconds later can still put it into real full-screen (likely macOS's
+window-tiling popover). Not yet fixed.
 
 Release 0.0.6, 2026-11-17: no code changes. It carries the rewritten README (demo GIF and screenshots, including macOS) so the
 directory listing shows it. `main.js` is expected to match 0.0.5 byte for byte. The macOS re-run of 0.0.5 was reported as passed
