@@ -18,7 +18,13 @@ so not caused by this change: the window is created not full-screenable, and a c
 clicking the green button and then pressing Ctrl+Cmd+F about 1.5 seconds later can still put it into real full-screen (likely macOS's
 window-tiling popover). Fix added to this release, untested on macOS: if the window still enters full screen, PopNote now leaves it at
 once (it allows full screen for the exit, which macOS requires, then guards it again) and removes its handlers on release. Covered by
-three new automated checks; a Mac re-test of the green-button case is still needed.
+three new automated checks. Mac re-test, reported by JD 2026-11-17 (macOS 27.2.1, Apple Silicon, Obsidian 1.15.0 app): in four trials of
+the green-button click then Ctrl+Cmd+F, the window left full screen by itself after about 570 ms (568 to 574 ms), returned to its normal
+size and was guarded again (`isFullScreenable` false). It only entered full screen on a window freshly created by reloading the plugin;
+on an already shown window the click only enlarged it and the key did nothing, as normal on macOS. A brief flash may still be visible
+(the animation was not seen in a screenshot). Not tested: the hover popover's "Full Screen" entry (a system panel that cannot be
+clicked) and View > Enter Full Screen (not present in this Obsidian). `shortcut.js`, `tray.js`, the real shortcut (same window each time)
+and the real menu-bar click all still pass.
 
 Release 0.0.6, 2026-11-17: no code changes. It carries the rewritten README (demo GIF and screenshots, including macOS) so the
 directory listing shows it. `main.js` is expected to match 0.0.5 byte for byte. The macOS re-run of 0.0.5 was reported as passed
