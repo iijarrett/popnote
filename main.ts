@@ -104,10 +104,11 @@ export default class PopNotePlugin extends Plugin {
 
   private async loadWindowSettings(): Promise<void> {
     try {
-      const data = await this.loadData();
+      const data: unknown = await this.loadData();
       if (typeof data !== "object" || data === null || Array.isArray(data)) return;
-      this.storedData = data;
-      const { windowBounds, opacity, notePath, shortcut, pinned, allSpaces, tray, helpShown } = data;
+      const stored = data as Record<string, unknown>;
+      this.storedData = stored;
+      const { windowBounds, opacity, notePath, shortcut, pinned, allSpaces, tray, helpShown } = stored;
       if (typeof pinned === "boolean") this.pinned = pinned;
       if (typeof allSpaces === "boolean") this.allSpaces = allSpaces;
       this.tray = tray === true;
@@ -120,10 +121,12 @@ export default class PopNotePlugin extends Plugin {
       if (typeof opacity === "number" && Number.isFinite(opacity)) {
         this.opacity = Math.min(1, Math.max(0.3, opacity));
       }
-      if (windowBounds && Number.isFinite(windowBounds.width) && Number.isFinite(windowBounds.height) &&
-        windowBounds.width > 0 && windowBounds.height > 0) {
-        const { x, y, width, height } = windowBounds;
-        this.bounds = Number.isFinite(x) && Number.isFinite(y) ? { x, y, width, height } : { width, height };
+      if (typeof windowBounds === "object" && windowBounds !== null) {
+        const { x, y, width, height } = windowBounds as Record<string, unknown>;
+        const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+        if (finite(width) && finite(height) && width > 0 && height > 0) {
+          this.bounds = finite(x) && finite(y) ? { x, y, width, height } : { width, height };
+        }
       }
     } catch {
       new Notice("PopNote: saved window settings could not be read.");

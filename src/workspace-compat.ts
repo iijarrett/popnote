@@ -1,7 +1,7 @@
 import type { Workspace, WorkspaceLeaf } from "obsidian";
 
-type RecordValue = Record<string, any>;
-type Method = (this: unknown, ...args: any[]) => any;
+type RecordValue = Record<string, unknown>;
+type Method = (this: unknown, ...args: unknown[]) => unknown;
 type InternalWorkspace = Workspace & { setLayout?: Method };
 const prefix = "popnote-owned-v1:";
 const ownedId = /^popnote-owned-v1:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -24,43 +24,51 @@ export function filterLayout(input: unknown): { layout: RecordValue; removedIds:
       throw new Error("invalid or duplicate floating node");
     }
     seen.add(node.id);
+    const type = node.type;
     const allowed = parent === "root" ? ["floating"] : parent === "floating" ? ["window"] : ["split", "tabs", "leaf"];
-    if (!allowed.includes(node.type)) throw new Error(`unexpected floating node type: ${String(node.type)}`);
-    if (node.id.startsWith("popnote-owned-") && (node.type !== "leaf" || !ownedId.test(node.id))) {
+    if (typeof type !== "string" || !allowed.includes(type)) {
+      throw new Error(`unexpected floating node type: ${typeof type === "string" ? type : typeof type}`);
+    }
+    if (node.id.startsWith("popnote-owned-") && (type !== "leaf" || !ownedId.test(node.id))) {
       throw new Error("unrecognized ownership marker");
     }
-    if (node.type === "leaf") {
+    if (type === "leaf") {
       if (!record(node.state) || typeof node.state.type !== "string" || node.children !== undefined) {
         throw new Error("unexpected leaf state");
       }
       return;
     }
-    if (!Array.isArray(node.children) || (node.currentTab !== undefined &&
-      (!Number.isInteger(node.currentTab) || node.currentTab < 0))) throw new Error("unexpected children or selected tab");
-    for (const child of node.children) validate(child, node.type, depth + 1);
+    const tab = node.currentTab;
+    if (!Array.isArray(node.children) || (tab !== undefined && (typeof tab !== "number" || !Number.isInteger(tab) || tab < 0))) {
+      throw new Error("unexpected children or selected tab");
+    }
+    const children: unknown[] = node.children;
+    for (const child of children) validate(child, type, depth + 1);
   };
   validate(layout.floating, "root", 0);
   const prune = (node: RecordValue): RecordValue | null => {
     if (node.type === "leaf") {
-      if (!ownedId.test(node.id)) return node;
-      removedIds.push(node.id);
+      const id = typeof node.id === "string" ? node.id : "";
+      if (!ownedId.test(id)) return node;
+      removedIds.push(id);
       return null;
     }
-    const children: RecordValue[] = node.children;
-    const selected = children[node.currentTab ?? 0];
+    const children = node.children as RecordValue[];
+    const tab = typeof node.currentTab === "number" ? node.currentTab : undefined;
+    const selected = children[tab ?? 0];
     const kept = children.map(prune).filter((child): child is RecordValue => child !== null);
     if (kept.length !== children.length) {
       node.children = kept;
       if (!kept.length) return null;
-      if (node.currentTab !== undefined) {
+      if (tab !== undefined) {
         const index = selected ? kept.indexOf(selected) : -1;
-        node.currentTab = index >= 0 ? index : Math.min(node.currentTab, kept.length - 1);
+        node.currentTab = index >= 0 ? index : Math.min(tab, kept.length - 1);
       }
     }
     return node;
   };
-  if (!prune(layout.floating)) delete layout.floating;
-  if (removedIds.includes(layout.active)) delete layout.active;
+  if (!prune(layout.floating as RecordValue)) delete layout.floating;
+  if (typeof layout.active === "string" && removedIds.includes(layout.active)) delete layout.active;
   return { layout, removedIds };
 }
 
@@ -104,28 +112,32 @@ export class WorkspaceCompatibility {
   install(): boolean {
     if (this.active) return !this.failed;
     this.cold = !this.host.layoutReady;
-    const compat = this;
+    const methods = this.host as unknown as Record<string, unknown>;
     try {
       for (const name of ["getLayout", "setLayout"] as const) {
-        const original = this.host[name];
+        const original = methods[name] as Method | undefined;
         if (typeof original !== "function") throw new Error(`${name} is unavailable`);
         const descriptor = Object.getOwnPropertyDescriptor(this.host, name);
-        const wrapper: Method = name === "getLayout" ? function (...args) {
-          if (compat.active) compat.beforeSave();
-          return compat.filter(original.apply(this, args), "outgoing");
-        } : function (...args) {
-          if (!compat.active || compat.failed) return original.apply(this, args);
+        const outgoing = (receiver: unknown, args: unknown[]): unknown => {
+          if (this.active) this.beforeSave();
+          return this.filter(original.apply(receiver, args), "outgoing");
+        };
+        const incoming = (receiver: unknown, args: unknown[]): unknown => {
+          if (!this.active || this.failed) return original.apply(receiver, args);
           const next = args.slice();
-          const filtered = compat.filter(args[0], "incoming");
+          const filtered = this.filter(args[0], "incoming");
           if (next.length) next[0] = filtered;
           // Do not await or catch the host: preserve its exact return/Promise and errors.
-          return original.apply(this, next);
+          return original.apply(receiver, next);
         };
-        if (!Reflect.set(this.host, name, wrapper) || this.host[name] !== wrapper) throw new Error(`${name} cannot be wrapped`);
+        const wrapper: Method = name === "getLayout"
+          ? function (this: unknown, ...args) { return outgoing(this, args); }
+          : function (this: unknown, ...args) { return incoming(this, args); };
+        if (!Reflect.set(this.host, name, wrapper) || methods[name] !== wrapper) throw new Error(`${name} cannot be wrapped`);
         if (name === "getLayout") this.originalGet = original;
         this.undo.push(() => {
           // A later plugin may retain our wrapper in its chain. It becomes pass-through.
-          if (this.host[name] !== wrapper) return;
+          if (methods[name] !== wrapper) return;
           if (descriptor) Object.defineProperty(this.host, name, descriptor);
           else Reflect.deleteProperty(this.host, name);
         });

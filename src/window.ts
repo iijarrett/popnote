@@ -130,12 +130,13 @@ export class PopNoteWindow {
     // Obsidian handles the hotkey on window capture before DOM listeners run.
     const delegate = original;
     let enabled = true;
-    const popout = this;
+    const intercept = (checking: boolean): boolean => {
+      if (!enabled || checking || !document.hasFocus() || !this.ownsDocument(document)) return false;
+      const active = workspace.getMostRecentLeaf();
+      return !!active && this.ownedLeaves.has(active) && !!this.addTab();
+    };
     function wrapped(this: NewTabCommand, checking: boolean): boolean | void {
-      if (enabled && !checking && document.hasFocus() && popout.ownsDocument(document)) {
-        const active = workspace.getMostRecentLeaf();
-        if (active && popout.ownedLeaves.has(active) && popout.addTab()) return true;
-      }
+      if (intercept(checking)) return true;
       return delegate.call(this, checking);
     }
     try { command.checkCallback = wrapped; }
@@ -261,7 +262,7 @@ export class PopNoteWindow {
         window.clearTimeout(timer);
         container.win.removeEventListener("pagehide", cancel);
         if (this.cancelAttachment === cancel) this.cancelAttachment = undefined;
-        if (error) reject(error instanceof Error ? error : new Error(String(error)));
+        if (error) reject(error instanceof Error ? error : new Error("Pop-out attachment failed."));
         else resolve(attached!);
       };
       const cancel = () => finish(new Error("Pop-out was closed while awaiting attachment."));
@@ -289,7 +290,7 @@ export class PopNoteWindow {
     const group = leaf.parent as TabGroup | undefined;
     const stableGroup = group?.tabsContainerEl?.parentElement === group?.containerEl &&
       group?.tabHeaderContainerEl?.parentElement === group?.containerEl && group?.containerEl?.ownerDocument === document;
-    const host = stableGroup ? group!.tabHeaderContainerEl : (leaf.view as { contentEl?: HTMLElement }).contentEl;
+    const host = stableGroup ? group.tabHeaderContainerEl : (leaf.view as { contentEl?: HTMLElement }).contentEl;
     if (!host || host.ownerDocument !== document || (!stableGroup && !leaf.view.containerEl.contains(host))) {
       throw new Error("Note content container is unavailable; standard window controls remain available.");
     }
@@ -303,7 +304,7 @@ export class PopNoteWindow {
       host.append(controls);
       const click = (event: MouseEvent) => {
         const button = (event.target as Element | null)?.closest?.(".workspace-tab-header-new-tab");
-        if (event.button === 0 && button && group!.tabHeaderContainerEl.contains(button)) openTab(event);
+        if (event.button === 0 && button && group.tabHeaderContainerEl.contains(button)) openTab(event);
       };
       const openTab = (event: MouseEvent) => {
         const workspace = this.app.workspace as { createLeafInTabGroup?: unknown };

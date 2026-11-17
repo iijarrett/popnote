@@ -5,6 +5,13 @@ first section; older sections keep the names and behavior of the version they te
 
 ## Current state
 
+Release 0.0.7, 2026-11-17, Windows 11: typing clean-up with no intended change in behavior. The Electron calls in `native.ts` and the layout
+hooks in `workspace-compat.ts` now use explicit types instead of `any`, and the saved-settings reader checks each value. The directory's
+lint report had 129 warnings, reproduced locally with the Obsidian ESLint plugin (131 messages); the same check now reports none. 119 of
+119 automated checks pass (including the installed-workspace test on Obsidian 1.15.1). Live checks on a fresh profile: `scenario.js`, `shortcut.js`
+and the restart checks on Obsidian 1.15.1, 1.10.6, 1.8.10 and 1.5.12; `tray.js` on 1.15.1 and 1.5.12; the settings page on 1.5.12 (plain
+page) and 1.15.1 (search definitions). Not re-run on macOS or Linux for this build.
+
 Release 0.0.6, 2026-11-17: no code changes. It carries the rewritten README (demo GIF and screenshots, including macOS) so the
 directory listing shows it. `main.js` is expected to match 0.0.5 byte for byte. The macOS re-run of 0.0.5 was reported as passed
 by JD.

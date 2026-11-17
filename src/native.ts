@@ -1,6 +1,6 @@
 import { Notice, Platform } from "obsidian";
 
-declare const require: (name: string) => any;
+declare const require: (name: string) => unknown;
 
 // Host-provided APIs only. No Electron object leaves this module.
 type Rectangle = { x: number; y: number; width: number; height: number };
@@ -33,7 +33,47 @@ type NativeWindow = {
   isVisibleOnAllWorkspaces(): boolean;
   setFullScreenable?(value: boolean): void;
   isFullScreenable?(): boolean;
+  moveTop?(): void;
 };
+
+type NativeImage = { resize?(options: { width: number; height: number; quality?: string }): NativeImage };
+type NativeTray = {
+  setToolTip?(tip: string): void;
+  on(event: string, handler: () => void): void;
+  setContextMenu?(menu: unknown): void;
+  popUpContextMenu?(menu: unknown): void;
+  destroy?(): void;
+  isDestroyed?(): boolean;
+};
+
+/** The parts of Electron's remote module PopNote uses. Every member is optional: each is feature-detected before use. */
+type Remote = {
+  BrowserWindow?: { getAllWindows?(): NativeWindow[] };
+  globalShortcut?: {
+    register?(accelerator: string, callback: () => void): boolean;
+    unregister?(accelerator: string): void;
+    isRegistered?(accelerator: string): boolean;
+  };
+  screen?: { getDisplayMatching?(area: Rectangle): { workArea: Rectangle } };
+  process?: { env?: Record<string, string | undefined> };
+  app?: { focus?(options: { steal: boolean }): void };
+  nativeTheme?: { shouldUseDarkColorsForSystemUI?: boolean };
+  nativeImage?: { createFromDataURL?(url: string): NativeImage };
+  Menu?: { buildFromTemplate?(template: unknown[]): unknown };
+  Tray?: new (image: NativeImage) => NativeTray;
+};
+
+/** Throws unless `target` has a callable `name`. Electron calls are checked like this before use, so a missing one turns that feature off. */
+function need<T extends object, K extends keyof T>(target: T | null | undefined, name: K): asserts target is T & Required<Pick<T, K>> {
+  if (typeof target?.[name] !== "function") throw new Error(`${String(name)} is unavailable`);
+}
+
+function needAll<T extends object>(target: T, names: Array<keyof T>): void {
+  for (const name of names) need(target, name);
+}
+
+/** Reads a field of a value that is known to be an object at the call site. */
+const fields = (value: unknown): Record<string, unknown> => value as Record<string, unknown>;
 
 /** Below this the tab strip cannot hold PopNote's controls plus a place to grab the window. */
 export const MINIMUM_WINDOW = { width: 340, height: 160 };
@@ -51,7 +91,7 @@ const ICON_GRAY = png("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADlElEQVR42
 export type TrayItem = { label: string; checked?: boolean; disabled?: boolean; click?: () => void; submenu?: TrayItem[] } | "separator";
 
 export class PopNoteNative {
-  private remote: any = null;
+  private remote: Remote | null = null;
   private window: NativeWindow | null = null;
   private canControl?: () => boolean;
   private binding = 0;
@@ -59,16 +99,17 @@ export class PopNoteNative {
   private changes = new Map<string, { undo: () => void }>();
   private accelerator: string | null = null;
   private disabled = new Set<string>();
-  private trayIcon: { destroy?(): void; isDestroyed?(): boolean } | null = null;
+  private trayIcon: NativeTray | null = null;
   private trayMenu: (() => unknown) | null = null;
 
   constructor(private pinFallbackLevel?: "pop-up-menu") {
-    for (const load of [
-      () => require("electron")?.remote,
+    const loaders: Array<() => unknown> = [
+      () => (require("electron") as { remote?: unknown } | undefined)?.remote,
       () => require("@electron/remote"),
-    ]) {
+    ];
+    for (const load of loaders) {
       try {
-        const remote = load();
+        const remote = load() as Remote | undefined;
         if (remote?.BrowserWindow || remote?.globalShortcut) {
           this.remote = remote;
           break;
@@ -98,10 +139,10 @@ export class PopNoteNative {
     }
   }
 
-  private method(target: any, name: string): void {
-    if (typeof target?.[name] !== "function") {
-      throw new Error(`${name} is unavailable`);
-    }
+  /** Only called from inside attempt(), which has already checked that remote exists. */
+  private get api(): Remote {
+    if (!this.remote) throw new Error("native access is unavailable");
+    return this.remote;
   }
 
   private liveWindow(): NativeWindow | null {
@@ -111,7 +152,7 @@ export class PopNoteNative {
       this.release();
       return null;
     }
-    this.method(window, "isDestroyed");
+    need(window, "isDestroyed");
     if (window.isDestroyed()) { this.release(); return null; }
     return window;
   }
@@ -120,15 +161,15 @@ export class PopNoteNative {
     this.release();
     return this.attempt("Native window lookup", () => {
       if (!canControl()) return false;
-      const windows = this.remote.BrowserWindow;
-      this.method(windows, "getAllWindows");
+      const windows = this.api.BrowserWindow;
+      need(windows, "getAllWindows");
       const originalTitle = document.title;
       const marker = `popnote-window-${crypto.randomUUID()}`;
       let matched: NativeWindow[];
       try {
         document.title = marker;
-        matched = windows.getAllWindows().filter((window: NativeWindow) => {
-          this.method(window, "getTitle");
+        matched = windows.getAllWindows().filter((window) => {
+          need(window, "getTitle");
           return window.getTitle() === marker;
         });
       } finally {
@@ -138,7 +179,7 @@ export class PopNoteNative {
         throw new Error(`expected one title match, got ${matched.length}`);
       }
       const window = matched[0];
-      this.method(window, "isDestroyed");
+      need(window, "isDestroyed");
       if (window.isDestroyed()) throw new Error("pop-out is closed");
       if (!Number.isInteger(window.id)) throw new Error("window ID is unavailable");
       if (!canControl()) return false;
@@ -155,19 +196,19 @@ export class PopNoteNative {
     const matches = (current: T, expected: T): boolean => {
       if (expected !== null && typeof expected === "object") {
         return current !== null && typeof current === "object" && Object.keys(expected).every((key) =>
-          (current as any)[key] === (expected as any)[key]);
+          fields(current)[key] === fields(expected)[key]);
       }
       return current === expected;
     };
     if (value !== null && typeof value === "object") {
-      if (!previous || Object.keys(value).some((key) => !valid((previous as any)[key]))) throw new Error("native bounds snapshot is unavailable");
+      if (!previous || Object.keys(value).some((key) => !valid(fields(previous)[key]))) throw new Error("native bounds snapshot is unavailable");
     } else if (typeof previous !== typeof value || !valid(previous)) throw new Error("native snapshot is unavailable");
     if (this.liveWindow() !== window) return false;
     const before = value !== null && typeof value === "object"
-      ? Object.fromEntries(Object.keys(value).map((key) => [key, (previous as any)[key]])) as T : previous;
+      ? Object.fromEntries(Object.keys(value).map((key) => [key, fields(previous)[key]])) as T : previous;
     const earlier = this.changes.get(feature) as { undo: () => void; last: T } | undefined;
     const entry = earlier ?? { last: value, undo: () => {
-      this.method(window, "isDestroyed");
+      need(window, "isDestroyed");
       if (!window.isDestroyed() && matches(read(), entry.last)) write(before);
     } };
     entry.last = value;
@@ -202,9 +243,7 @@ export class PopNoteNative {
     return this.attempt("Window toggle", (): "shown" | "focused" | "hidden" | undefined => {
       const window = this.liveWindow();
       if (!window) return;
-      for (const method of ["isMinimized", "isVisible", "isFocused", "show", "showInactive", "restore", "focus", "hide"]) {
-        this.method(window, method);
-      }
+      needAll(window, ["isMinimized", "isVisible", "isFocused", "show", "showInactive", "restore", "focus", "hide"]);
       const visible = (value: boolean) => this.change("Window visibility", window, () => window.isVisible(),
         (before) => { if (before) window.showInactive(); else window.hide(); }, value);
       let action: "shown" | "focused" | "hidden";
@@ -237,19 +276,18 @@ export class PopNoteNative {
   private bringForward(window: NativeWindow): void {
     if (!Platform.isMacOS) return;
     try { this.remote?.app?.focus?.({ steal: true }); } catch { /* Raising is a convenience. */ }
-    try { (window as { moveTop?: () => void }).moveTop?.(); } catch { /* Same. */ }
+    try { window.moveTop?.(); } catch { /* Same. */ }
   }
 
   private canPositionWindow(): boolean {
-    return !Platform.isLinux || this.remote.process?.env?.XDG_SESSION_TYPE !== "wayland";
+    return !Platform.isLinux || this.api.process?.env?.XDG_SESSION_TYPE !== "wayland";
   }
 
   restoreBounds(bounds: WindowBounds): void {
     this.attempt("Restore window bounds", () => {
       const window = this.liveWindow();
       if (!window) return;
-      this.method(window, "setBounds");
-      this.method(window, "getNormalBounds");
+      needAll(window, ["setBounds", "getNormalBounds"]);
       const apply = (value: WindowBounds) => this.change("Restore window bounds", window,
         () => window.getNormalBounds(), (before) => window.setBounds(before), value);
       const width = Math.max(bounds.width, MINIMUM_WINDOW.width);
@@ -259,8 +297,8 @@ export class PopNoteNative {
         apply({ width, height });
         return;
       }
-      const screen = this.remote.screen;
-      this.method(screen, "getDisplayMatching");
+      const screen = this.api.screen;
+      need(screen, "getDisplayMatching");
       const { workArea } = screen.getDisplayMatching({ x, y, width, height });
       const fittedWidth = Math.min(width, workArea.width);
       const fittedHeight = Math.min(height, workArea.height);
@@ -277,7 +315,7 @@ export class PopNoteNative {
     return this.attempt("Remember window bounds", () => {
       const window = this.liveWindow();
       if (!window) return;
-      for (const method of ["getNormalBounds", "on", "removeListener"]) this.method(window, method);
+      needAll(window, ["getNormalBounds", "on", "removeListener"]);
       const canPosition = this.canPositionWindow();
       const binding = this.binding;
       let active = true;
@@ -313,11 +351,11 @@ export class PopNoteNative {
     this.attempt("Minimum window size", () => {
       const window = this.liveWindow();
       if (!window) return;
-      this.method(window, "setMinimumSize");
-      this.method(window, "getMinimumSize");
+      need(window, "setMinimumSize");
+      need(window, "getMinimumSize");
       this.change("Minimum window size", window,
-        () => { const [width, height] = window.getMinimumSize!(); return { width, height }; },
-        (size) => window.setMinimumSize!(size.width, size.height), { ...MINIMUM_WINDOW });
+        () => { const [width, height] = window.getMinimumSize(); return { width, height }; },
+        (size) => window.setMinimumSize(size.width, size.height), { ...MINIMUM_WINDOW });
     });
   }
 
@@ -330,9 +368,9 @@ export class PopNoteNative {
     this.attempt("Full screen guard", () => {
       const window = this.liveWindow();
       if (!window) return;
-      this.method(window, "setFullScreenable");
-      this.method(window, "isFullScreenable");
-      this.change("Full screen guard", window, () => window.isFullScreenable!(), (value) => window.setFullScreenable!(value), false);
+      need(window, "setFullScreenable");
+      need(window, "isFullScreenable");
+      this.change("Full screen guard", window, () => window.isFullScreenable(), (value) => window.setFullScreenable(value), false);
     });
   }
 
@@ -340,8 +378,7 @@ export class PopNoteNative {
     return this.attempt("Pin", () => {
       const window = this.liveWindow();
       if (!window) return false;
-      this.method(window, "setAlwaysOnTop");
-      this.method(window, "isAlwaysOnTop");
+      needAll(window, ["setAlwaysOnTop", "isAlwaysOnTop"]);
       const read = () => window.isAlwaysOnTop();
       return this.change("Pin", window, read, (pinned) => {
         window.setAlwaysOnTop(pinned);
@@ -357,9 +394,9 @@ export class PopNoteNative {
     return this.attempt("Opacity", () => {
       const window = this.liveWindow();
       if (!window) return false;
-      this.method(window, "setOpacity");
-      this.method(window, "getOpacity");
-      const read = () => window.getOpacity!();
+      need(window, "setOpacity");
+      need(window, "getOpacity");
+      const read = () => window.getOpacity();
       return this.change("Opacity", window, read, (opacity) => {
         window.setOpacity(opacity);
         const applied = read();
@@ -375,8 +412,7 @@ export class PopNoteNative {
     this.attempt("All Spaces", () => {
       const window = this.liveWindow();
       if (!window) return;
-      this.method(window, "setVisibleOnAllWorkspaces");
-      this.method(window, "isVisibleOnAllWorkspaces");
+      needAll(window, ["setVisibleOnAllWorkspaces", "isVisibleOnAllWorkspaces"]);
       this.change("All Spaces", window, () => window.isVisibleOnAllWorkspaces(), (before) => window.setVisibleOnAllWorkspaces(before), true);
     });
   }
@@ -388,9 +424,9 @@ export class PopNoteNative {
   registerShortcut(accelerator: string, callback: () => void, reclaim = false): boolean {
     if (accelerator === this.accelerator) return true;
     return this.attempt("Global shortcut", () => {
-      const shortcuts = this.remote.globalShortcut;
-      this.method(shortcuts, "register");
-      this.method(shortcuts, "unregister");
+      const shortcuts = this.api.globalShortcut;
+      need(shortcuts, "register");
+      need(shortcuts, "unregister");
       if (reclaim && typeof shortcuts.isRegistered === "function" && shortcuts.isRegistered(accelerator)) {
         shortcuts.unregister(accelerator);
       }
@@ -422,7 +458,7 @@ export class PopNoteNative {
     // Cleanup still runs if normal shortcut operations have been disabled.
     try {
       const shortcuts = this.remote?.globalShortcut;
-      this.method(shortcuts, "unregister");
+      need(shortcuts, "unregister");
       shortcuts.unregister(this.accelerator);
       this.accelerator = null;
       return true;
@@ -440,14 +476,14 @@ export class PopNoteNative {
   createTray(onClick: () => void, items: () => TrayItem[]): boolean {
     if (this.trayIcon) return true;
     return this.attempt("Tray icon", () => {
-      const { Tray, nativeImage, Menu } = this.remote;
-      if (typeof Tray !== "function" || typeof nativeImage?.createFromDataURL !== "function") {
-        throw new Error("Tray is unavailable");
-      }
+      const { Tray, nativeImage, Menu } = this.api;
+      if (typeof Tray !== "function") throw new Error("Tray is unavailable");
+      need(nativeImage, "createFromDataURL");
       const mac = Platform.isMacOS;
-      const dark = this.remote.nativeTheme?.shouldUseDarkColorsForSystemUI;
+      const dark = this.api.nativeTheme?.shouldUseDarkColorsForSystemUI;
       let image = nativeImage.createFromDataURL(mac ? png(ICON_MAC) : dark === true ? ICON_LIGHT : dark === false ? ICON_DARK : ICON_GRAY);
-      if (typeof image.resize === "function") image = mac ? image.resize({ width: 18, height: 18, quality: "best" }) : image.resize({ width: 16, height: 16 });
+      const resized = image.resize?.(mac ? { width: 18, height: 18, quality: "best" } : { width: 16, height: 16 });
+      if (resized) image = resized;
       const tray = new Tray(image);
       this.trayIcon = tray;
       // A failing action must never throw into the host, and one bad action should not switch the whole tray off.
@@ -457,7 +493,10 @@ export class PopNoteNative {
         ...(item.checked !== undefined ? { type: "checkbox", checked: item.checked } : {}),
         ...(item.submenu ? { submenu: item.submenu.map(convert) } : { click: safely(item.click) }),
       };
-      const build = () => Menu.buildFromTemplate(items().map(convert));
+      const build = () => {
+        need(Menu, "buildFromTemplate");
+        return Menu.buildFromTemplate(items().map(convert));
+      };
       try {
         tray.setToolTip?.("PopNote");
         tray.on("click", () => { try { onClick(); } catch { this.disable("Tray icon", "click handler failed"); } });
