@@ -1,7 +1,7 @@
 {
   "id": "popnote",
   "name": "PopNote",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "minAppVersion": "1.5.12",
   "description": "Open a note in a floating desktop window with a global shortcut, pinning, and opacity controls.",
   "author": "JD",
