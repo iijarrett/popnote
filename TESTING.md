@@ -899,3 +899,15 @@ restoration as a prerequisite. Do not change the global Ctrl+Alt+P shortcut.
    behavior, not a jump to PopNote controls. Press **Ctrl+Z** if Tab edited the
    note. Stop and report focus at each step, any hiding, and any main-window
    restoration. The temporary hotkey may be removed after the check.
+
+## 2026-11-18: Windows 11, Open on the current desktop (Obsidian 1.15.1, test vault)
+
+Real virtual desktops, driven with Ctrl+Win+D and the Windows desktop API to check which desktop each window is on.
+
+- PopNote open and showing, then a switch to a new desktop. The old window still reported itself visible and focused, but its
+  page reported hidden. Pressing the toggle command closed it and opened a new window that Windows placed on the current
+  desktop, with no switch back. Passed.
+- PopNote hidden, then a switch to another new desktop and a toggle: a new window opened on the current desktop. Passed.
+- Toggle while the window was showing on this desktop: it hid, and the next toggle showed it. Passed.
+- Not run by hand: the tray icon click (it uses the same check) and the global shortcut (the command path was used).
+- Finding: `isFocused()` can stay true after a desktop switch, so the decision uses the page's visibility instead of focus.

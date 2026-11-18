@@ -1,4 +1,5 @@
 import { Notice, Platform } from "obsidian";
+import type { WindowState } from "./desktop";
 
 declare const require: (name: string) => unknown;
 
@@ -234,6 +235,16 @@ export class PopNoteNative {
         this.disable(feature, `cleanup failed (${error instanceof Error ? error.message : String(error)})`);
       }
     }
+  }
+
+  /** Whether the window is visible, minimized or focused right now. Undefined when it cannot be read. */
+  windowState(): WindowState | undefined {
+    return this.attempt("Window state", (): WindowState | undefined => {
+      const window = this.liveWindow();
+      if (!window) return;
+      needAll(window, ["isMinimized", "isVisible", "isFocused"]);
+      return { visible: window.isVisible(), minimized: window.isMinimized(), focused: window.isFocused() };
+    });
   }
 
   /**
