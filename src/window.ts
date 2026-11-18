@@ -21,6 +21,7 @@ export class PopNoteWindow {
   private tabGroup?: TabGroup;
   private addingTab = false;
   private stopTabInput?: () => void;
+  private stopMenuGuard?: () => void;
   private app: App;
   private cancelAttachment?: () => void;
 
@@ -36,11 +37,6 @@ export class PopNoteWindow {
       this.leaf.view.containerEl.ownerDocument === this.document;
     if (!open && this.document) this.release("previous pop-out is unavailable");
     return open;
-  }
-
-  /** Whether the window's page is showing on screen. False when it is hidden, on another virtual desktop, or fully covered. */
-  isShowing(): boolean {
-    return this.document?.visibilityState === "visible";
   }
 
   private validContainer(container: WorkspaceWindow): boolean {
@@ -90,7 +86,7 @@ export class PopNoteWindow {
 
   private release(reason: string, detach = false): void {
     if (!this.leaf) return;
-    const { container, controls, controlsHost, ownedLeaves, stopTabInput, cancelAttachment } = this;
+    const { container, controls, controlsHost, ownedLeaves, stopTabInput, stopMenuGuard, cancelAttachment } = this;
     this.leaf = null;
     this.container = null;
     this.document = null;
@@ -100,8 +96,10 @@ export class PopNoteWindow {
     this.ownedLeaves = new Set();
     this.tabGroup = undefined;
     this.stopTabInput = undefined;
+    this.stopMenuGuard = undefined;
 
     stopTabInput?.();
+    stopMenuGuard?.();
     cancelAttachment?.();
     // Unregister focus handlers before removing a root that may contain focus.
     try { this.onRelease(reason); }
@@ -123,6 +121,40 @@ export class PopNoteWindow {
       } catch { /* A window that cannot be detached is left for the user to close. */ }
     }
     for (const leaf of ownedLeaves) this.compatibility.release(leaf);
+  }
+
+  /**
+   * In a small window Obsidian's long "More options" menu is pushed up over the button that opened it, so the button cannot be
+   * pressed again to close it. When a menu lands on that button, move it just below the button and let it scroll.
+   */
+  private keepMenuClear(document: Document): () => void {
+    const view = document.defaultView;
+    if (!view || typeof MutationObserver !== "function") return () => {};
+    const MARGIN = 4;
+    const adjust = (menu: HTMLElement) => {
+      try {
+        const buttons = document.querySelectorAll(".view-header .view-actions .view-action");
+        const button = buttons[buttons.length - 1];
+        if (!button || !menu.isConnected) return;
+        const target = button.getBoundingClientRect();
+        const box = menu.getBoundingClientRect();
+        const overlaps = box.left < target.right && box.right > target.left && box.top < target.bottom && box.bottom > target.top;
+        if (!overlaps) return;
+        const top = Math.round(target.bottom + MARGIN);
+        menu.setCssProps({ top: `${top}px`, "max-height": `${Math.max(80, view.innerHeight - top - MARGIN)}px` });
+        menu.classList.add("popnote-menu-clear");
+      } catch { /* The menu stays where Obsidian put it. */ }
+    };
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        record.addedNodes.forEach((node) => {
+          if (node.nodeType === 1 && (node as HTMLElement).classList.contains("menu")) view.requestAnimationFrame(() => adjust(node as HTMLElement));
+        });
+      }
+    });
+    try { observer.observe(document.body, { childList: true }); }
+    catch { return () => {}; }
+    return () => observer.disconnect();
   }
 
   private bindNewTabCommand(document: Document): () => void {
@@ -301,6 +333,7 @@ export class PopNoteWindow {
     }
     const controls = host.createDiv({ cls: "popnote-overlay" });
     this.controls = controls;
+    this.stopMenuGuard = this.keepMenuClear(document);
     this.controlsHost = host;
     host.classList.add("popnote-overlay-host");
     if (stableGroup) {

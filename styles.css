@@ -215,3 +215,8 @@
   color: var(--text-on-accent);
   background: var(--interactive-accent);
 }
+
+/* A menu that was moved clear of its button in a small window scrolls instead of running off the bottom. */
+.menu.popnote-menu-clear {
+  overflow-y: auto;
+}

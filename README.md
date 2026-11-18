@@ -42,8 +42,6 @@ Enter. You can also run **PopNote: Use current note** to switch to the note you 
 - **Remembers everything.** The note, size, position, pin and opacity are saved.
 - **Tray or menu-bar icon (optional).** A click shows or hides PopNote. A right-click opens a menu: show or hide,
   **Keep on top**, **Opacity** (presets or **Slider…**), **Find note…** and **Switch note** (your five most recent).
-- **Opens on the desktop you are on (Windows).** If PopNote was left on another virtual desktop, the shortcut or tray icon
-  opens it here instead of switching you back. You can turn this off in the settings.
 - **Fits any theme.** It uses your theme's colors and fonts, with nothing to set up.
 - **Works at small sizes.** The window can shrink to 340 × 160 and keeps a place to grab it.
 
@@ -63,7 +61,6 @@ On macOS:
 - **Global shortcut.** Write it without spaces, for example `Ctrl+Alt+P`. Use `Super` for the Windows key (`Super+Q`) and
   `Command` on a Mac. Spellings such as `Win + Q` can fail. A refused shortcut keeps the previous one.
 - **Show on all desktops.** macOS Spaces and similar. Applies the next time PopNote opens.
-- **Open on the current desktop.** Windows only, on by default. Reopens the window on your current virtual desktop, so extra tabs are not kept.
 - **Tray icon.** Off by default. Windows may place a new icon behind the **^** in the taskbar. Drag it out to keep it
   visible. Some Linux desktops have no tray.
 
@@ -79,7 +76,7 @@ Commands you can give hotkeys in **Settings → Hotkeys**: **PopNote: Toggle win
 | Linux | Checked under WSLg only. Window opacity is not applied there, so that control is disabled. Tray support depends on the desktop. |
 | Mobile | Not supported. PopNote does nothing on mobile. |
 
-On Windows, PopNote cannot pin itself to every virtual desktop, so by default it opens on the desktop you are on. To keep one window on every desktop instead, turn off **Open on the current desktop**, press Win+Tab, right-click the PopNote window and choose
+On Windows, PopNote cannot pin itself to every virtual desktop. Press Win+Tab, right-click the PopNote window and choose
 **Show this window on all desktops**. See [TESTING.md](TESTING.md) for dated test results and what is still unconfirmed.
 
 ## Things to know

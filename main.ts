@@ -1,5 +1,4 @@
 import { Notice, Platform, Plugin, PluginSettingTab, Setting, TFile, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
-import { shouldReopenOnThisDesktop } from "./src/desktop";
 import { PopNoteNative, type TrayItem, type WindowBounds } from "./src/native";
 import { rankNotes } from "./src/notes";
 import { OverlayControls } from "./src/overlay";
@@ -27,7 +26,6 @@ export default class PopNotePlugin extends Plugin {
   private shortcut = "";
   private shortcutActive = false;
   private allSpaces = false;
-  private currentDesktop = Platform.isWin;
   private tray = false;
   private helpShown = false;
 
@@ -110,9 +108,8 @@ export default class PopNotePlugin extends Plugin {
       if (typeof data !== "object" || data === null || Array.isArray(data)) return;
       const stored = data as Record<string, unknown>;
       this.storedData = stored;
-      const { windowBounds, opacity, notePath, shortcut, pinned, allSpaces, tray, helpShown, currentDesktop } = stored;
+      const { windowBounds, opacity, notePath, shortcut, pinned, allSpaces, tray, helpShown } = stored;
       if (typeof pinned === "boolean") this.pinned = pinned;
-      if (typeof currentDesktop === "boolean") this.currentDesktop = currentDesktop;
       if (typeof allSpaces === "boolean") this.allSpaces = allSpaces;
       this.tray = tray === true;
       this.helpShown = helpShown === true;
@@ -166,7 +163,7 @@ export default class PopNotePlugin extends Plugin {
     const snapshot = {
       ...this.storedData, notePath: this.notePath, shortcut: this.savedShortcut,
       windowBounds: this.bounds, opacity: this.opacity, pinned: this.pinned,
-      allSpaces: this.allSpaces, tray: this.tray, helpShown: this.helpShown, currentDesktop: this.currentDesktop,
+      allSpaces: this.allSpaces, tray: this.tray, helpShown: this.helpShown,
     };
     this.pendingSaves++;
     this.saveQueue = this.saveQueue.then(async () => {
@@ -201,13 +198,8 @@ export default class PopNotePlugin extends Plugin {
     return this.shortcut;
   }
 
-  settingsSnapshot(): { allSpaces: boolean; tray: boolean; currentDesktop: boolean } {
-    return { allSpaces: this.allSpaces, tray: this.tray, currentDesktop: this.currentDesktop };
-  }
-
-  setCurrentDesktop(value: boolean): void {
-    this.currentDesktop = value;
-    this.queueSave();
+  settingsSnapshot(): { allSpaces: boolean; tray: boolean } {
+    return { allSpaces: this.allSpaces, tray: this.tray };
   }
 
   setAllSpaces(value: boolean): void {
@@ -350,19 +342,11 @@ export default class PopNotePlugin extends Plugin {
 
   private async toggle(source: "command" | "shortcut" | "tray"): Promise<void> {
     if (this.stopped || !this.native || !this.popout) return;
-    let open = this.popout.isOpen();
+    const open = this.popout.isOpen();
     if (this.busy) return;
     this.busy = true;
-    let operation = ++this.operation;
+    const operation = ++this.operation;
     try {
-      if (open && this.currentDesktop && Platform.isWin &&
-        shouldReopenOnThisDesktop(this.native.windowState(), this.popout.isShowing())) {
-        // Windows would switch back to the desktop this window was left on. A new window opens on the current one.
-        this.popout.close();
-        open = false;
-        this.busy = true;
-        operation = ++this.operation;
-      }
       if (open) {
         // Windows: a tray click takes focus from the window, so a visible window must hide whatever its focus. On macOS the click
         // does not, so hide only a focused window and raise one that is visible but behind other windows.
@@ -444,7 +428,7 @@ export default class PopNotePlugin extends Plugin {
 type SettingRow = { name: string; desc: string; aliases?: string[]; visible?: boolean; build?: (setting: Setting) => void };
 
 const INTRO = "Press the shortcut to open PopNote, then use its Note button to pick what it shows. The note, shortcut, size, position, pin and opacity are remembered. \"PopNote: Show controls\" can be given a hotkey in Settings > Hotkeys.";
-const WINDOWS_TIP = "Pin keeps PopNote on top. To keep one window on every desktop instead, turn off Open on the current desktop, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.";
+const WINDOWS_TIP = "Pin keeps PopNote on top. To show it on every virtual desktop, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.";
 
 class PopNoteSettings extends PluginSettingTab {
   private plugin: PopNotePlugin;
@@ -472,13 +456,6 @@ class PopNoteSettings extends PluginSettingTab {
         desc: "macOS Spaces and similar. Applies the next time PopNote opens. On Windows see the tip below.",
         build: (setting) => {
           setting.addToggle((toggle) => toggle.setValue(current.allSpaces).onChange((value) => { plugin.setAllSpaces(value); }));
-        },
-      },
-      {
-        name: "Open on the current desktop", aliases: ["virtual desktops", "desktop"], visible: Platform.isWin,
-        desc: "Windows only. When PopNote was left on another virtual desktop, the shortcut or tray icon opens it here instead of switching you back. It reopens the window each time, so extra tabs are not kept.",
-        build: (setting) => {
-          setting.addToggle((toggle) => toggle.setValue(current.currentDesktop).onChange((value) => { plugin.setCurrentDesktop(value); }));
         },
       },
       {

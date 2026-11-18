@@ -328,12 +328,12 @@ test("settings are searchable on new Obsidian and still render on older versions
   const row = () => { const calls = []; const chain = new Proxy({}, { get: (_, name) => (...args) => { calls.push(name); for (const arg of args) if (typeof arg === "function") arg(chain); return chain; } }); return { chain, calls }; };
   const win = host(settings, { windows: true }); await win.plugin.onload();
   const items = win.settingTabs[0].getSettingDefinitions();
-  assert.deepEqual([...items.map(item => item.name)], ["How it works", "Global shortcut", "Show on all desktops", "Open on the current desktop", "Tray icon", "Windows tip"]);
+  assert.deepEqual([...items.map(item => item.name)], ["How it works", "Global shortcut", "Show on all desktops", "Tray icon", "Windows tip"]);
   assert.ok(items.filter(item => item.render).length >= 3 && items.every(item => typeof item.desc === "string"));
   const { chain, calls } = row(); items.find(item => item.name === "Tray icon").render(chain);
   assert.ok(calls.includes("addToggle"));
   const other = host(settings); await other.plugin.onload();
-  assert.equal(other.settingTabs[0].getSettingDefinitions().some(item => ["Windows tip", "Open on the current desktop"].includes(item.name) && item.visible !== false), false);
+  assert.equal(other.settingTabs[0].getSettingDefinitions().some(item => item.name === "Windows tip" && item.visible !== false), false);
   const text = [], tab = other.settingTabs[0];
   tab.containerEl = { empty() {}, createEl: (tag, options) => text.push(options.text) };
   tab.display();
@@ -480,7 +480,7 @@ test("mixed tabs release controls/native effects before shortcut, callbacks or s
   assert.equal(h.windows[1].alpha, 0.4);
   h.sliders[0](0.9); h.toggles[0](false); staleBounds(); h.tick(); await settle();
   assert.equal(h.windows[1].alpha, 0.4); assert.equal(oldWindow.alpha, 1);
-  assert.deepEqual(h.disk(), { ...guardedSettings, pinned: true, allSpaces: false, tray: false, helpShown: false, currentDesktop: false });
+  assert.deepEqual(h.disk(), { ...guardedSettings, pinned: true, allSpaces: false, tray: false, helpShown: false });
   assert.equal(h.writes.length, 1, "only the remembered pin was saved");
   h.plugin.onunload(); await settle();
   assert.equal(owned.detaches, 0); assert.equal(oldWindow.destroyed, false);
