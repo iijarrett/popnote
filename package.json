@@ -1,6 +1,6 @@
 {
   "name": "popnote",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "private": true,
   "description": "Open a note in a floating Obsidian desktop window.",
   "scripts": {

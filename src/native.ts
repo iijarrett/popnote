@@ -78,6 +78,10 @@ const fields = (value: unknown): Record<string, unknown> => value as Record<stri
 
 /** Below this the tab strip cannot hold PopNote's controls plus a place to grab the window. */
 export const MINIMUM_WINDOW = { width: 340, height: 160 };
+/** How long a window stays hidden before it is shown again on a new desktop. Under about 60 ms Windows still treats it as on the old one. */
+const REHOME_DELAY_MS = 120;
+/** After a window is shown, its page keeps reporting not showing for about a second. */
+const SHOWN_SETTLE_MS = 1800;
 
 // 64 x 64 notepad-and-pencil icons (shrunk to 16): dark and light for the taskbar theme (dark also serves as the macOS template image), gray when unknown.
 const png = (data: string) => `data:image/png;base64,${data}`;
@@ -96,6 +100,7 @@ export class PopNoteNative {
   private window: NativeWindow | null = null;
   private canControl?: () => boolean;
   private binding = 0;
+  private shownAt = 0;
   private stopBounds?: () => void;
   private changes = new Map<string, { undo: () => void }>();
   private accelerator: string | null = null;
@@ -158,8 +163,14 @@ export class PopNoteNative {
     return window;
   }
 
+  /** True for a moment after the window was shown, while its page still reports not showing. */
+  justShown(): boolean {
+    return Date.now() - this.shownAt < SHOWN_SETTLE_MS;
+  }
+
   bind(document: Document, canControl: () => boolean): boolean {
     this.release();
+    this.shownAt = Date.now();
     return this.attempt("Native window lookup", () => {
       if (!canControl()) return false;
       const windows = this.api.BrowserWindow;
@@ -237,6 +248,38 @@ export class PopNoteNative {
   }
 
   /**
+   * Windows keeps a visible window on the virtual desktop where it was left, so showing it again would switch the user back to
+   * that desktop. A hidden window belongs to no desktop. Hiding it briefly and showing it again puts it on the current one.
+   * Resolves "shown" when it did that, or undefined when the window is not visible (so the caller shows it as usual).
+   */
+  showOnThisDesktop(): Promise<"shown" | undefined> {
+    const target = this.attempt("Window desktop", (): NativeWindow | undefined => {
+      const native = this.liveWindow();
+      if (!native) return;
+      needAll(native, ["isMinimized", "isVisible", "show", "showInactive", "focus", "hide"]);
+      if (native.isMinimized() || !native.isVisible()) return;
+      const visible = (value: boolean) => this.change("Window visibility", native, () => native.isVisible(),
+        (before) => { if (before) native.showInactive(); else native.hide(); }, value);
+      return visible(false) ? native : undefined;
+    });
+    if (!target) return Promise.resolve(undefined);
+    const binding = this.binding;
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        resolve(this.attempt("Window desktop", (): "shown" | undefined => {
+          if (binding !== this.binding || this.liveWindow() !== target) return;
+          const visible = (value: boolean) => this.change("Window visibility", target, () => target.isVisible(),
+            (before) => { if (before) target.showInactive(); else target.hide(); }, value);
+          if (!visible(true) || this.liveWindow() !== target) return;
+          target.focus();
+          this.shownAt = Date.now();
+          return "shown";
+        }));
+      }, REHOME_DELAY_MS);
+    });
+  }
+
+  /**
    * "toggle": hide when focused, otherwise show or focus. "hide-if-visible" is for the tray icon, whose click takes focus
    * away, so a visible window must still hide. "show" never hides.
    */
@@ -266,6 +309,7 @@ export class PopNoteNative {
         this.bringForward(window);
         action = "focused";
       }
+      if (action !== "hidden") this.shownAt = Date.now();
       return action;
     });
   }

@@ -347,6 +347,15 @@ export default class PopNotePlugin extends Plugin {
     this.busy = true;
     const operation = ++this.operation;
     try {
+      if (open && Platform.isWin && !this.popout.isShowing() && !this.native.justShown()) {
+        // A visible window whose page is not showing was left on another virtual desktop. Showing it as usual would switch the user
+        // back to that desktop, so it is hidden and shown again on this one. A hidden window is not affected and is shown as usual.
+        const moved = await this.native.showOnThisDesktop();
+        if (moved) {
+          if (!this.stopped && this.popout.isOpen()) this.focusNote();
+          return;
+        }
+      }
       if (open) {
         // Windows: a tray click takes focus from the window, so a visible window must hide whatever its focus. On macOS the click
         // does not, so hide only a focused window and raise one that is visible but behind other windows.
@@ -379,7 +388,7 @@ export default class PopNotePlugin extends Plugin {
         notes: (query) => this.noteMatches(query),
         choose: (path) => allowed() ? this.chooseNote(path) : Promise.resolve(false),
         pinHint: Platform.isWin
-          ? "To show it on every desktop: press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops"
+          ? "The shortcut and tray icon bring it to the desktop you are on. To keep one window on every desktop instead, press Win+Tab, right-click it, then choose Show this window on all desktops"
           : undefined,
         opacity: (value) => allowed() && this.setOpacityValue(value),
       });
@@ -403,7 +412,7 @@ export default class PopNotePlugin extends Plugin {
       if (Platform.isWin && !this.helpShown) {
         this.helpShown = true;
         this.queueSave();
-        new Notice("PopNote tip: to show it on every desktop, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.", 15000);
+        new Notice("PopNote tip: if it is left on another virtual desktop, the shortcut or tray icon brings it to the desktop you are on. To keep one window on every desktop instead, press Win+Tab, right-click it, then choose Show this window on all desktops.", 15000);
       }
       // Creation already shows the public pop-out; do not toggle it back to hidden.
     } catch (error) {
@@ -428,7 +437,7 @@ export default class PopNotePlugin extends Plugin {
 type SettingRow = { name: string; desc: string; aliases?: string[]; visible?: boolean; build?: (setting: Setting) => void };
 
 const INTRO = "Press the shortcut to open PopNote, then use its Note button to pick what it shows. The note, shortcut, size, position, pin and opacity are remembered. \"PopNote: Show controls\" can be given a hotkey in Settings > Hotkeys.";
-const WINDOWS_TIP = "Pin keeps PopNote on top. To show it on every virtual desktop, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.";
+const WINDOWS_TIP = "Pin keeps PopNote on top. If PopNote is left on another virtual desktop, the shortcut or tray icon brings it to the desktop you are on. To keep one window on every desktop instead, press Win+Tab, right-click the PopNote window, then choose Show this window on all desktops.";
 
 class PopNoteSettings extends PluginSettingTab {
   private plugin: PopNotePlugin;

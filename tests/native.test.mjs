@@ -10,7 +10,7 @@ const code = ts.transpileModule(readFileSync(new URL("../src/native.ts", import.
 }).outputText;
 
 function host(pinFallbackLevel, mac = false) {
-  const notices = [], listeners = new Map();
+  const notices = [], listeners = new Map(), timers = [];
   const document = { title: "note" };
   let allowed = true;
   const original = {
@@ -40,13 +40,13 @@ function host(pinFallbackLevel, mac = false) {
   };
   const module = { exports: {} };
   vm.runInNewContext(code, {
-    module, exports: module.exports, crypto: { randomUUID },
+    module, exports: module.exports, crypto: { randomUUID }, window: { setTimeout: (callback, delay) => { timers.push({ callback, delay }); return timers.length; } },
     require: name => name === "obsidian" ? {
       Notice: class { constructor(message) { notices.push(message); } }, Platform: { isLinux: false, isMacOS: mac },
     } : { remote },
   });
   const native = new module.exports.PopNoteNative(pinFallbackLevel);
-  return { native, original, unrelated, document, notices, listeners, remote,
+  return { native, original, unrelated, document, notices, listeners, remote, timers,
     allow(value) { allowed = value; }, bind() { return native.bind(document, () => allowed); } };
 }
 
@@ -238,4 +238,39 @@ test("on macOS a show or focus activates the app and raises the window; a failur
   assert.deepEqual([stolen, raised], [2, 2]);
   h.remote.app = { focus() { throw new Error("no"); } }; h.original.moveTop = () => { throw new Error("no"); };
   h.original.isFocused = () => false; assert.equal(h.native.toggle(), "focused"); assert.deepEqual(h.notices, []);
+});
+
+test("a window left on another desktop is hidden, then shown again after a pause so it lands on the current desktop", async () => {
+  const h = host(); h.bind();
+  const events = [];
+  h.original.hide = function () { this.visible = false; events.push("hide"); };
+  h.original.showInactive = function () { this.visible = true; events.push("show"); };
+  h.original.focus = () => events.push("focus");
+  const pending = h.native.showOnThisDesktop();
+  assert.equal(h.original.visible, false, "hidden at once");
+  assert.equal(h.timers.length, 1); assert.ok(h.timers[0].delay >= 100, "a pause long enough for Windows to forget the old desktop");
+  h.timers[0].callback();
+  assert.equal(await pending, "shown");
+  assert.deepEqual(events, ["hide", "show", "focus"]); assert.equal(h.original.visible, true);
+  assert.equal(h.native.justShown(), true);
+});
+
+test("showing on this desktop leaves a hidden or minimized window to the normal path", async () => {
+  const h = host(); h.bind(); h.original.visible = false;
+  assert.equal(await h.native.showOnThisDesktop(), undefined); assert.equal(h.timers.length, 0);
+  h.original.visible = true; h.original.isMinimized = () => true;
+  assert.equal(await h.native.showOnThisDesktop(), undefined); assert.equal(h.timers.length, 0);
+});
+
+test("a window released during the pause is not shown again", async () => {
+  const h = host(); h.bind();
+  const pending = h.native.showOnThisDesktop();
+  h.native.release();
+  h.timers[0].callback();
+  assert.equal(await pending, undefined);
+  assert.equal(h.original.visible, true, "release restores the visibility it found");
+});
+
+test("justShown is false before any window was shown", () => {
+  const h = host(); assert.equal(h.native.justShown(), false);
 });

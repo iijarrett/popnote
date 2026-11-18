@@ -42,6 +42,7 @@ Enter. You can also run **PopNote: Use current note** to switch to the note you 
 - **Remembers everything.** The note, size, position, pin and opacity are saved.
 - **Tray or menu-bar icon (optional).** A click shows or hides PopNote. A right-click opens a menu: show or hide,
   **Keep on top**, **Opacity** (presets or **Slider…**), **Find note…** and **Switch note** (your five most recent).
+- **Follows you across desktops (Windows).** If PopNote was left on another virtual desktop, the shortcut or tray icon brings it to the one you are on.
 - **Fits any theme.** It uses your theme's colors and fonts, with nothing to set up.
 - **Works at small sizes.** The window can shrink to 340 × 160 and keeps a place to grab it.
 
@@ -76,8 +77,7 @@ Commands you can give hotkeys in **Settings → Hotkeys**: **PopNote: Toggle win
 | Linux | Checked under WSLg only. Window opacity is not applied there, so that control is disabled. Tray support depends on the desktop. |
 | Mobile | Not supported. PopNote does nothing on mobile. |
 
-On Windows, PopNote cannot pin itself to every virtual desktop. Press Win+Tab, right-click the PopNote window and choose
-**Show this window on all desktops**. See [TESTING.md](TESTING.md) for dated test results and what is still unconfirmed.
+On Windows, if you leave PopNote on one virtual desktop and switch to another, the shortcut or tray icon brings it to the desktop you are on. To keep one window on every desktop instead, press Win+Tab, right-click the PopNote window and choose **Show this window on all desktops**. See [TESTING.md](TESTING.md) for dated test results and what is still unconfirmed.
 
 ## Things to know
 

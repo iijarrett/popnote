@@ -39,6 +39,11 @@ export class PopNoteWindow {
     return open;
   }
 
+  /** Whether the window's page is showing on screen. False when it is hidden, on another virtual desktop, or fully covered. */
+  isShowing(): boolean {
+    return this.document?.visibilityState === "visible";
+  }
+
   private validContainer(container: WorkspaceWindow): boolean {
     const main = this.app.workspace.containerEl.ownerDocument;
     return container.doc !== main && container.win !== main.defaultView && !container.win.closed &&

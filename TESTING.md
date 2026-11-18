@@ -911,3 +911,19 @@ the main window on a different desktop.
 In a 340 x 180 window Obsidian's "More options" menu used to land on top of its own button, so the button could not be pressed
 again to close it. PopNote now moves such a menu just below the button and lets it scroll. Checked in the test vault: the menu
 sits below the button, the second press closes it, and in a large window the menu is left where Obsidian puts it.
+
+## 2026-11-18: Windows, showing on the current desktop (real shortcut, Obsidian 1.15.1, test vault)
+
+Found by logging the desktop and every Obsidian window while pressing the real global shortcut. Windows 11 with five desktops.
+
+- Cause of the original jump: a visible window stays on the desktop it was left on, so showing it takes you back there.
+- Closing the window and opening a new one (0.0.8) fails: closing hands focus to the main window on the old desktop, which switches
+  desktops before the new window exists. Opening the new window first would work but costs about 100 ms every time.
+- A hidden window belongs to no desktop (its desktop id is empty) and takes the current one when shown. Hiding and showing at once
+  does not work (Windows keeps the old desktop); hiding for 60 ms or more does. PopNote waits 120 ms.
+- The page keeps reporting "not showing" for about a second after a window is shown, so PopNote ignores that signal for 1.8 s.
+
+Results: with the window left on one desktop, the shortcut pressed on another desktop showed it there with focus, with no switch,
+every time (10 runs across desktops 0 to 4). Hide on one desktop then show on another: every time (5 runs). A second press 0.8 s after showing hides
+it. A tray toggle on another desktop placed it there. Same-desktop hide and show are unchanged and instant.
+Not tried by hand: a physical tray click and a right-click menu choice; they use the same code path.
