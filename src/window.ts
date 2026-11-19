@@ -146,7 +146,7 @@ export class PopNoteWindow {
         const overlaps = box.left < target.right && box.right > target.left && box.top < target.bottom && box.bottom > target.top;
         if (!overlaps) return;
         const top = Math.round(target.bottom + MARGIN);
-        menu.setCssProps({ top: `${top}px`, "max-height": `${Math.max(80, view.innerHeight - top - MARGIN)}px` });
+        menu.setCssProps({ "--popnote-menu-top": `${top}px`, "--popnote-menu-height": `${Math.max(80, view.innerHeight - top - MARGIN)}px` });
         menu.classList.add("popnote-menu-clear");
       } catch { /* The menu stays where Obsidian put it. */ }
     };
