@@ -216,9 +216,9 @@
   background: var(--interactive-accent);
 }
 
-/* A menu that was moved clear of its button in a small window sits just below the button and scrolls. Obsidian sets the menu's top inline, so this needs !important. */
+/* A menu that was moved clear of its button in a small window sits just below the button and scrolls. Obsidian sets the menu's top inline, so the menu is shifted with translate instead. */
 .menu.popnote-menu-clear {
-  top: var(--popnote-menu-top) !important;
+  translate: 0 var(--popnote-menu-shift);
   max-height: var(--popnote-menu-height);
   overflow-y: auto;
 }
